@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>FAB — From Sand to Silicon</title>
+<style>
+  :root{
+    --bg:#05080f; --panel:rgba(12,18,30,.82); --line:#1d2c44;
+    --txt:#dce6f5; --dim:#7e91ad; --acc:#34e0c0; --acc2:#5aa9ff;
+    --warn:#ffb454; --bad:#ff5d6c; --good:#46d97e;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font-family:var(--sans)}
+  canvas{display:block;position:fixed;inset:0;z-index:1}
+  #ui{position:fixed;inset:0;z-index:10;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between}
+
+  /* top bar */
+  #top{pointer-events:auto;display:flex;align-items:center;gap:16px;padding:12px 18px;
+    background:linear-gradient(#05080fdd,#05080f00)}
+  #logo{font-family:var(--mono);font-weight:700;letter-spacing:3px;font-size:15px;color:var(--acc)}
+  #logo small{color:var(--dim);font-weight:400;letter-spacing:1px}
+  #stagepips{display:flex;gap:4px;flex-wrap:wrap;flex:1}
+  .pip{width:13px;height:13px;border-radius:3px;background:#13203a;border:1px solid #21345a;
+    font-size:8px;display:flex;align-items:center;justify-content:center;color:#445;cursor:default;transition:.2s}
+  .pip.done{background:var(--good);border-color:var(--good);color:#04210f}
+  .pip.active{background:var(--acc);border-color:var(--acc);color:#022;box-shadow:0 0 10px var(--acc)}
+  #meters{display:flex;gap:14px;font-family:var(--mono);font-size:11px}
+  .meter{min-width:96px}
+  .meter b{display:block;color:var(--dim);font-weight:400;font-size:9px;letter-spacing:1px}
+  .bar{height:6px;border-radius:3px;background:#13203a;margin-top:3px;overflow:hidden}
+  .bar i{display:block;height:100%;width:0;border-radius:3px;transition:width .5s}
+
+  /* bottom panel */
+  #panel{pointer-events:auto;margin:0 auto 16px;width:min(940px,94vw);
+    background:var(--panel);backdrop-filter:blur(14px);border:1px solid var(--line);
+    border-radius:16px;padding:16px 20px;box-shadow:0 20px 60px #0009}
+  #phead{display:flex;align-items:baseline;gap:12px;margin-bottom:6px}
+  #pnum{font-family:var(--mono);color:var(--acc);font-size:13px}
+  #ptitle{font-size:19px;font-weight:700;margin:0}
+  #pin,#pout{font-family:var(--mono);font-size:11px;color:var(--dim)}
+  #pin b,#pout b{color:var(--acc2)}
+  #pdesc{font-size:13.5px;line-height:1.55;color:#c4d2e6;margin:6px 0 4px}
+  #pchem{font-family:var(--mono);font-size:12px;color:var(--warn);background:#1a140a55;
+    border-left:3px solid var(--warn);padding:6px 10px;border-radius:4px;margin:8px 0;white-space:pre-wrap}
+  #pfact{font-size:12px;color:var(--dim);font-style:italic;margin-top:6px}
+  #pfact::before{content:"◇ "; color:var(--acc)}
+  #controls{display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap}
+  button{pointer-events:auto;font-family:var(--sans);font-weight:600;font-size:13px;cursor:pointer;
+    border:1px solid var(--acc);background:#0c2b27;color:var(--acc);padding:9px 18px;border-radius:9px;transition:.15s}
+  button:hover{background:var(--acc);color:#04231f;transform:translateY(-1px)}
+  button:disabled{opacity:.35;cursor:not-allowed;transform:none}
+  button.ghost{border-color:#33486e;background:transparent;color:var(--dim)}
+  button.ghost:hover{background:#16223a;color:var(--txt)}
+  #hint{font-size:12px;color:var(--acc2);flex:1;min-width:200px}
+  #score{font-family:var(--mono);font-size:12px;color:var(--good)}
+
+  /* interactive control widgets injected per stage */
+  #widget{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .slider{display:flex;flex-direction:column;gap:2px;font-family:var(--mono);font-size:10px;color:var(--dim)}
+  .slider input{width:150px;accent-color:var(--acc)}
+  .slider span{color:var(--txt);font-size:11px}
+  .readout{font-family:var(--mono);font-size:12px}
+
+  /* intro / outro */
+  #overlay{position:fixed;inset:0;background:radial-gradient(circle at 50% 35%,#0b1426,#05080f);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
+    pointer-events:auto;z-index:20;padding:24px}
+  #overlay h1{font-size:42px;margin:0;letter-spacing:6px;
+    background:linear-gradient(90deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
+  #overlay p{max-width:620px;color:var(--dim);line-height:1.6;font-size:15px}
+  #overlay .big{font-size:16px;padding:13px 34px;margin-top:10px}
+  .hide{display:none!important}
+  .toast{position:fixed;top:64px;left:50%;transform:translateX(-50%);background:var(--panel);
+    border:1px solid var(--acc);color:var(--txt);padding:10px 20px;border-radius:10px;font-size:13px;
+    z-index:30;box-shadow:0 10px 30px #0008;animation:pop .3s}
+  @keyframes pop{from{opacity:0;transform:translateX(-50%) translateY(-8px)}}
+  kbd{font-family:var(--mono);background:#16223a;border:1px solid #2a3a5a;border-radius:4px;padding:1px 5px;font-size:11px}
+</style>
+</head>
+<body>
+<div id="ui">
+  <div id="top">
+    <div id="logo">◆ FAB <small>sand → silicon</small></div>
+    <div id="stagepips"></div>
+    <div id="meters">
+      <div class="meter"><b>PURITY</b><div class="bar"><i id="m-pure" style="background:var(--acc)"></i></div></div>
+      <div class="meter"><b>YIELD</b><div class="bar"><i id="m-yield" style="background:var(--good)"></i></div></div>
+    </div>
+  </div>
+
+  <div id="panel">
+    <div id="phead">
+      <span id="pnum">00</span>
+      <h2 id="ptitle">—</h2>
+    </div>
+    <div id="pin">IN: <b>—</b></div>
+    <div id="pdesc"></div>
+    <div id="pchem"></div>
+    <div id="pfact"></div>
+    <div id="pout">OUT: <b>—</b></div>
+    <div id="controls">
+      <div id="widget"></div>
+      <span id="hint"></span>
+      <span id="score"></span>
+      <button id="next" class="ghost" disabled>Next step ▸</button>
+    </div>
+  </div>
+</div>
+
+<div id="overlay">
+  <h1>FAB</h1>
+  <p><b>From Sand to Silicon.</b> Run a real semiconductor fab from raw quartz to a packaged chip.
+  Every one of the 18 steps is a real manufacturing process — with the real chemistry, temperatures and tools.
+  Tune each process to maximize <span style="color:var(--acc)">purity</span> and
+  <span style="color:var(--good)">yield</span>. Get it wrong and you scrap the wafer.</p>
+  <p style="font-size:13px">Drag to orbit · scroll to zoom · adjust the sliders, then run each step.</p>
+  <button id="start" class="big">▶ Start the line</button>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+}}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* ============================ ENGINE ============================ */
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x05080f);
+scene.fog = new THREE.Fog(0x05080f, 14, 38);
+
+const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.1, 200);
+camera.position.set(0,3.2,9);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = .08;
+controls.minDistance = 3; controls.maxDistance = 20;
+controls.target.set(0,1.4,0);
+
+scene.add(new THREE.HemisphereLight(0x6688cc, 0x0a0e18, .8));
+const key = new THREE.DirectionalLight(0xffffff, 1.4); key.position.set(6,9,5); scene.add(key);
+const rim = new THREE.DirectionalLight(0x44ffe0, .6); rim.position.set(-6,3,-6); scene.add(rim);
+
+// floor grid
+const grid = new THREE.GridHelper(60,60,0x1d3050,0x111d33);
+grid.position.y=0; grid.material.opacity=.4; grid.material.transparent=true; scene.add(grid);
+
+addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+
+// per-stage object container we can clear
+let stageGroup = new THREE.Group(); scene.add(stageGroup);
+let updaters = [];           // functions(dt) run each frame for current stage
+const clock = new THREE.Clock();
+function clearStage(){
+  updaters = [];
+  stageGroup.traverse(o=>{ o.geometry?.dispose?.(); if(o.material){ (Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.dispose()); }});
+  scene.remove(stageGroup); stageGroup = new THREE.Group(); scene.add(stageGroup);
+}
+function tick(){
+  requestAnimationFrame(tick);
+  const dt = Math.min(clock.getDelta(),.05);
+  updaters.forEach(f=>f(dt));
+  controls.update();
+  renderer.render(scene,camera);
+}
+tick();
+
+/* small helpers ------------------------------------------------ */
+const M = (c,opt={})=> new THREE.MeshStandardMaterial({color:c, metalness:.2, roughness:.6, ...opt});
+const rnd=(a,b)=>a+Math.random()*(b-a);
+function glow(c,s=1){ // sprite-ish point light blob
+  const l=new THREE.PointLight(c,s,12); return l;
+}
+function label3d(){} // (kept minimal; UI is HTML)
+
+/* ============================ GAME STATE ============================ */
+const state = { purity: 5, yield: 100, stage: 0, score: 0 };
+const el = id => document.getElementById(id);
+function setMeter(id,v){ el(id).style.width = Math.max(0,Math.min(100,v))+'%'; }
+function refreshMeters(){
+  setMeter('m-pure', state.purity);
+  setMeter('m-yield', state.yield);
+  el('m-pure').style.background = state.purity>80?'var(--acc)':state.purity>40?'var(--warn)':'var(--bad)';
+  el('m-yield').style.background = state.yield>80?'var(--good)':state.yield>40?'var(--warn)':'var(--bad)';
+}
+function toast(msg,col='var(--acc)'){
+  const t=document.createElement('div'); t.className='toast'; t.style.borderColor=col;
+  t.innerHTML=msg; document.body.appendChild(t);
+  setTimeout(()=>{t.style.opacity=0;t.style.transition='.4s';},1600);
+  setTimeout(()=>t.remove(),2100);
+}
+
+/* ============================ STAGE DEFINITIONS ============================
+   Each stage:
+   { name, in, out, desc, chem, fact, purityTarget(optional),
+     build(group, api): set up 3D + interactive widget,
+     api gives: addUpdater, widget(html), onRun(cb), setHint, complete(scoreObj) }
+*/
+const W = el('widget');
+
+function makeAPI(){
+  let runCb=null;
+  return {
+    addUpdater:f=>updaters.push(f),
+    widget:html=>{ W.innerHTML=html; },
+    setHint:t=>{ el('hint').innerHTML=t; },
+    onRun:cb=>{ runCb=cb; },
+    _run:()=>runCb&&runCb(),
+  };
+}
+
+// reusable: spinning ingot / wafer puck
+function wafer(color=0xb8c4d6,r=2,h=.12){
+  const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,80), M(color,{metalness:.9,roughness:.18}));
+  return m;
+}
+
+const STAGES = [
+{
+  name:"Quartz Sand", in:"Silica-rich sand (SiO₂)", out:"Sorted high-grade quartz",
+  desc:"Everything starts with silicon dioxide. High-purity quartz sand (~99% SiO₂) is mined and screened. The cleaner the source rock, the less refining downstream — so you sort out feldspar and iron-bearing grains first.",
+  chem:"Feedstock:  SiO₂  (silicon dioxide)\nTarget grade:  >99% SiO₂, low Fe/Al",
+  fact:"A typical 200 mm wafer needs only a few grams of silicon, but it must be 99.9999999% pure — 9 nines.",
+  build(g,api){
+    // pile of sand grains
+    const grains=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(.08,0), M(0xd9c08a,{roughness:.95}), 600);
+    const d=new THREE.Object3D();
+    for(let i=0;i<600;i++){ const a=Math.random()*6.28,r=Math.sqrt(Math.random())*2.6;
+      d.position.set(Math.cos(a)*r, .05+Math.random()*.4*(1-r/3), Math.sin(a)*r);
+      d.scale.setScalar(rnd(.5,1.4)); d.rotation.set(rnd(0,6),rnd(0,6),rnd(0,6)); d.updateMatrix();
+      grains.setMatrixAt(i,d.matrix);
+    } g.add(grains);
+    // a few "impurity" red grains to remove
+    let impur=[];
+    for(let i=0;i<8;i++){ const m=new THREE.Mesh(new THREE.IcosahedronGeometry(.13,0),M(0xc44,{emissive:0x551111}));
+      const a=Math.random()*6.28,r=Math.sqrt(Math.random())*2.4; m.position.set(Math.cos(a)*r,.25,Math.sin(a)*r);
+      m.userData.imp=true; g.add(m); impur.push(m); }
+    api.addUpdater(dt=>{ grains.rotation.y+=dt*.06; });
+    let removed=0;
+    api.widget(`<span class="readout">Pick out the iron-bearing grains: <b id="cnt">0/8</b></span>`);
+    api.setHint("Click the glowing red impurity grains in the pile to sort the sand.");
+    // raycast clicks
+    const ray=new THREE.Raycaster(), mouse=new THREE.Vector2();
+    function click(e){
+      mouse.x=(e.clientX/innerWidth)*2-1; mouse.y=-(e.clientY/innerHeight)*2+1;
+      ray.setFromCamera(mouse,camera);
+      const hit=ray.intersectObjects(impur.filter(m=>m.visible))[0];
+      if(hit){ hit.object.visible=false; removed++; el('cnt').textContent=removed+"/8";
+        toast("Impurity removed ✓"); if(removed>=8){ api.setHint("Sand sorted. Run the step."); enableRun(); }}
+    }
+    renderer.domElement.addEventListener('click',click);
+    api._cleanup=()=>renderer.domElement.removeEventListener('click',click);
+    disableRun(); // must sort first
+    api.onRun(()=>{
+      const p = 5 + removed*1.0; // purity baseline
+      gainPurity(p, "feedstock graded");
+      finishStage({purity:p, yield:0, note:`Sorted ${removed}/8 impurities`});
+    });
+  }
+},
+{
+  name:"Metallurgical Silicon", in:"Quartz + carbon (coke/coal/wood)", out:"MG-Si (~98–99% Si)",
+  desc:"In a submerged electric-arc furnace at ~1900 °C, carbon strips the oxygen from silica — carbothermic reduction. The result is metallurgical-grade silicon, still far too dirty for chips. Keep the carbon ratio right: too little and you waste SiO₂, too much leaves silicon carbide.",
+  chem:"SiO₂ + 2 C  →  Si + 2 CO↑    (≈ 1900 °C, electric arc)\nSide:  SiO₂ + 3 C → SiC + 2 CO  (too much carbon)",
+  fact:"This is a brute-force, energy-hungry step: producing one tonne of MG-Si takes ~11–13 MWh of electricity.",
+  build(g,api){
+    // arc furnace: crucible + electrodes + molten glow
+    const crucible=new THREE.Mesh(new THREE.CylinderGeometry(2,1.7,1.6,40,1,true),M(0x3a2418,{side:THREE.DoubleSide,roughness:.9}));
+    crucible.position.y=.8; g.add(crucible);
+    const melt=new THREE.Mesh(new THREE.CylinderGeometry(1.85,1.85,.3,40),
+      new THREE.MeshStandardMaterial({color:0xff5500,emissive:0xff3300,emissiveIntensity:1.4}));
+    melt.position.y=1.3; g.add(melt);
+    const L=glow(0xff6622,3); L.position.set(0,1.6,0); g.add(L);
+    const elec=[];
+    for(let i=0;i<3;i++){ const a=i/3*6.28; const e=new THREE.Mesh(new THREE.CylinderGeometry(.22,.22,2.4,16),M(0x222,{roughness:.5}));
+      e.position.set(Math.cos(a)*.9,2.6,Math.sin(a)*.9); g.add(e); elec.push(e);
+      const sp=glow(0x88ddff,1.5); sp.position.set(Math.cos(a)*.9,1.45,Math.sin(a)*.9); g.add(sp);
+    }
+    // smoke particles (CO)
+    const smoke=new THREE.InstancedMesh(new THREE.SphereGeometry(.12,6,6),
+      new THREE.MeshStandardMaterial({color:0x99a,transparent:true,opacity:.18}),40);
+    const sd=new THREE.Object3D(), sp=[];
+    for(let i=0;i<40;i++){ sp.push({y:rnd(1.5,5),a:rnd(0,6),r:rnd(.2,1.4),s:rnd(.4,1.2)}); }
+    g.add(smoke);
+    api.addUpdater(dt=>{ melt.material.emissiveIntensity=1.2+Math.sin(performance.now()*.005)*.4;
+      sp.forEach((p,i)=>{ p.y+=dt*(.6+p.s); if(p.y>5)p.y=1.5;
+        sd.position.set(Math.cos(p.a)*p.r,p.y,Math.sin(p.a)*p.r); sd.scale.setScalar(p.s*(1+(p.y-1.5)/4)); sd.updateMatrix(); smoke.setMatrixAt(i,sd.matrix);});
+      smoke.instanceMatrix.needsUpdate=true;
+    });
+    api.widget(`
+      <div class="slider">Carbon ratio (C:SiO₂)
+        <input id="s1" type="range" min="0.5" max="3" step="0.05" value="1.4">
+        <span id="v1">1.40 (ideal ≈ 2.0)</span></div>
+      <div class="slider">Furnace temp
+        <input id="s2" type="range" min="1400" max="2200" step="20" value="1700">
+        <span id="v2">1700 °C (ideal ≈ 1900)</span></div>`);
+    const s1=el('s1'),s2=el('s2');
+    const upd=()=>{ el('v1').textContent=(+s1.value).toFixed(2)+" (ideal ≈ 2.0)";
+      el('v2').textContent=s2.value+" °C (ideal ≈ 1900)";
+      melt.material.emissiveIntensity = (s2.value-1400)/800*1.6; };
+    s1.oninput=s2.oninput=upd; upd();
+    api.setHint("Aim for a 2:1 carbon ratio and ~1900 °C, then smelt.");
+    api.onRun(()=>{
+      const cErr=Math.abs(s1.value-2.0)/2.0, tErr=Math.abs(s2.value-1900)/900;
+      const q=Math.max(0,1-(cErr*1.1+tErr)); // 0..1
+      const p = 20 + q*15;                    // ~98-99% real, abstracted
+      const yl = -(cErr*40+tErr*30);
+      gainPurity(p-state.purity>0?p-state.purity: p, "carbothermic reduction");
+      state.purity = Math.max(state.purity, p);
+      finishStage({purity:p, yield:yl, note:q>.8?"Clean reduction":"Off-ratio: SiC/loss"});
+    });
+  }
+},
+{
+  name:"Electronic Grade Silicon", in:"MG-Si + HCl", out:"EG-Si / polysilicon (9N, 99.9999999%)",
+  desc:"The Siemens process. MG-Si reacts with hydrogen chloride to form liquid trichlorosilane, which is fractionally distilled to extreme purity, then decomposed back onto hot silicon rods with hydrogen. This is where silicon becomes electronic-grade: 9 nines pure.",
+  chem:"Si + 3 HCl  →  SiHCl₃ + H₂          (form trichlorosilane, ~300 °C)\nSiHCl₃ + H₂  →  Si + 3 HCl    (deposit on rods, ~1100 °C)",
+  fact:"After distillation, impurities are below 1 part per billion — equivalent to one wrong grain in a swimming pool of sand.",
+  build(g,api){
+    // distillation column
+    const col=new THREE.Mesh(new THREE.CylinderGeometry(.7,.7,5,32),M(0x9fb3c9,{metalness:.85,roughness:.25}));
+    col.position.y=2.6; g.add(col);
+    for(let i=0;i<7;i++){ const ring=new THREE.Mesh(new THREE.TorusGeometry(.74,.06,8,32),M(0x6f8398,{metalness:.9}));
+      ring.position.y=.7+i*.66; ring.rotation.x=Math.PI/2; g.add(ring); }
+    // bubbling fraction inside (purity gradient)
+    const bub=new THREE.InstancedMesh(new THREE.SphereGeometry(.07,6,6),
+      new THREE.MeshStandardMaterial({color:0x66e0ff,emissive:0x113344,transparent:true,opacity:.7}),60);
+    const bd=new THREE.Object3D(), bp=[];
+    for(let i=0;i<60;i++) bp.push({y:rnd(.2,5),a:rnd(0,6),r:rnd(0,.55),s:rnd(.5,1.3)});
+    g.add(bub);
+    let pass=0, target=3;
+    api.addUpdater(dt=>{ bp.forEach((p,i)=>{ p.y+=dt*p.s*1.3; if(p.y>5)p.y=.2;
+      bd.position.set(Math.cos(p.a)*p.r,p.y,Math.sin(p.a)*p.r); bd.scale.setScalar(p.s); bd.updateMatrix(); bub.setMatrixAt(i,bd.matrix);});
+      bub.instanceMatrix.needsUpdate=true; col.rotation.y+=dt*.05;});
+    api.widget(`<span class="readout">Distillation passes: <b id="pp">0</b> / ${target}+</span>
+      <button id="distill">Run a distillation pass</button>`);
+    api.setHint("Each fractional distillation pass strips more impurity. Do at least 3 — but each pass costs a little material.");
+    disableRun();
+    el('distill').onclick=()=>{ pass++; el('pp').textContent=pass; toast(`Pass ${pass}: impurities ↓`);
+      if(pass>=target){ enableRun(); api.setHint("9N purity reached. Deposit onto the rods."); } };
+    api.onRun(()=>{
+      const p = Math.min(99.9, 70 + pass*9);
+      const yl = -(pass*3);  // material lost each pass
+      state.purity=Math.max(state.purity,p);
+      gainPurity(0,"Siemens process");
+      finishStage({purity:p, yield:yl, note:`${pass} distillation passes`});
+    });
+  }
+},
+{
+  name:"Monocrystalline Ingot — Czochralski", in:"Molten EG-Si + seed crystal", out:"Single-crystal Si ingot (boule)",
+  desc:"Polysilicon is melted at 1414 °C. A tiny seed crystal touches the surface and is slowly pulled upward while rotating — atoms align onto the seed's lattice, growing one continuous single crystal. Pull too fast and the crystal loses its single-grain structure.",
+  chem:"Si(s) → Si(l)  at 1414 °C, then ordered re-solidification\nDopant added to melt sets base type:  B → p-type,  P → n-type",
+  fact:"A modern boule is 300 mm across, ~2 m long, and weighs over 250 kg — yet it's a single, virtually flawless crystal.",
+  build(g,api){
+    const cru=new THREE.Mesh(new THREE.CylinderGeometry(1.6,1.3,1.2,40),M(0x3a2418,{roughness:.9})); cru.position.y=.6; g.add(cru);
+    const melt=new THREE.Mesh(new THREE.CylinderGeometry(1.45,1.45,.2,40),
+      new THREE.MeshStandardMaterial({color:0xff7722,emissive:0xff5500,emissiveIntensity:1.2})); melt.position.y=1.1; g.add(melt);
+    g.add(Object.assign(glow(0xff7733,2),{position:new THREE.Vector3(0,1.2,0)}));
+    // the growing boule
+    const boule=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,.1,32),M(0xc6d2e4,{metalness:.95,roughness:.15}));
+    boule.position.y=1.25; g.add(boule);
+    let grown=0, pull=1.0, rot=1.0, integrity=1;
+    api.addUpdater(dt=>{ melt.material.emissiveIntensity=1+Math.sin(performance.now()*.004)*.3;
+      boule.rotation.y+=dt*rot*2; });
+    api.widget(`
+      <div class="slider">Pull speed (mm/min)
+        <input id="ps" type="range" min="0.3" max="4" step="0.1" value="2.5"><span id="pv">2.5 (ideal ≈ 1.2)</span></div>
+      <div class="slider">Rotation (rpm)
+        <input id="rs" type="range" min="2" max="30" step="1" value="6"><span id="rv">6 rpm</span></div>
+      <button id="grow">Pull ingot ⤒</button>
+      <span class="readout">Length: <b id="ln">0.0</b> cm · grain: <b id="gr">100%</b></span>`);
+    const ps=el('ps'),rs=el('rs');
+    ps.oninput=()=>{el('pv').textContent=(+ps.value).toFixed(1)+" (ideal ≈ 1.2)";};
+    rs.oninput=()=>{el('rv').textContent=rs.value+" rpm"; rot=+rs.value/6;};
+    api.setHint("Pull slowly (~1.2 mm/min) to keep a single crystal. Click Pull a few times to grow the boule.");
+    disableRun();
+    el('grow').onclick=()=>{
+      pull=+ps.value;
+      const speedErr=Math.max(0,(pull-1.2))/2.8;
+      integrity = Math.max(.3, integrity - speedErr*0.18 - 0.01);
+      grown+=0.9; const h=grown*0.18;
+      boule.geometry.dispose(); boule.geometry=new THREE.CylinderGeometry(.42,.42,h,32);
+      boule.position.y=1.2+h/2;
+      // grain quality tints color toward orange if poor
+      boule.material.color.setHSL(.58,.15,.4+integrity*.4);
+      el('ln').textContent=(h*100/0.18*0.9).toFixed(1); el('ln').textContent=(grown*4).toFixed(1);
+      el('gr').textContent=Math.round(integrity*100)+"%";
+      if(grown>=4){ enableRun(); api.setHint("Boule grown. Cool and remove it."); }
+    };
+    api.onRun(()=>{
+      const p = 90+integrity*9.9;
+      const yl = -(1-integrity)*60;
+      state.purity=Math.max(state.purity,p);
+      finishStage({purity:p, yield:yl, note:`Crystal grain ${Math.round(integrity*100)}%`});
+    });
+  }
+},
+{
+  name:"Wafer Slicing", in:"Silicon boule", out:"Thin Si wafers",
+  desc:"The boule's ends are cropped and it's ground to an exact diameter, then a diamond wire saw slices it into wafers under a millimetre thick. Feed too fast and wafers crack or warp; the kerf (sawdust) is pure silicon lost forever.",
+  chem:"Mechanical: diamond-impregnated wire, ~0.1 mm kerf\nThousands of parallel wires cut the whole boule at once",
+  fact:"Up to ~40% of the precious crystal can end up as kerf loss — which is why kerf-free slicing is hot research.",
+  build(g,api){
+    const boule=new THREE.Mesh(new THREE.CylinderGeometry(1.4,1.4,5,48),M(0xc6d2e4,{metalness:.95,roughness:.15}));
+    boule.rotation.z=Math.PI/2; boule.position.y=1.6; g.add(boule);
+    // wire saw plane
+    const wires=new THREE.Group();
+    for(let i=-12;i<=12;i++){ const w=new THREE.Mesh(new THREE.CylinderGeometry(.01,.01,3,6),M(0x888,{metalness:1}));
+      w.position.x=i*0.18; wires.add(w);} wires.position.y=1.6; g.add(wires);
+    let slicing=false, prog=0, speed=1.0;
+    api.addUpdater(dt=>{ if(slicing){ wires.position.y-=dt*1.4*speed; prog+=dt*0.5*speed;
+      if(wires.position.y<0.2){ wires.position.y=3; }
+      boule.rotation.x+=dt*0.4; }});
+    api.widget(`<div class="slider">Feed rate
+      <input id="fr" type="range" min="0.4" max="3" step="0.1" value="2.2"><span id="fv">2.2 (gentle ≈ 1.0)</span></div>
+      <button id="slice">Start wire saw</button>`);
+    el('fr').oninput=()=>{el('fv').textContent=(+el('fr').value).toFixed(1)+" (gentle ≈ 1.0)"; speed=+el('fr').value;};
+    api.setHint("A slow, steady feed avoids cracking. Start the saw, let it run, then continue.");
+    disableRun();
+    el('slice').onclick=()=>{ slicing=true; el('slice').disabled=true; toast("Slicing wafers…");
+      setTimeout(()=>{enableRun(); api.setHint("Wafers cut. Move to polishing.");},1800); };
+    api.onRun(()=>{
+      const fr=+el('fr').value, crack=Math.max(0,(fr-1.0))/2;
+      const yl=-(crack*45+12); // kerf + cracking
+      finishStage({purity:0, yield:yl, note:`Kerf + ${Math.round(crack*100)}% crack loss`});
+    });
+  }
+},
+{
+  name:"Wafer Polishing (Lapping & CMP)", in:"As-cut wafer", out:"Mirror-flat wafer",
+  desc:"As-cut wafers are rough and stressed. Lapping and chemical-mechanical polishing make one face atomically flat and mirror-smooth — flatness within a few nanometres across 300 mm. Without this, lithography later can't focus.",
+  chem:"Mechanical abrasion + chemical slurry (colloidal SiO₂, alkaline)\nEdges rounded; surface damage layer removed",
+  fact:"A finished wafer is so flat that, scaled to the size of a football field, the highest bump would be under a millimetre.",
+  build(g,api){
+    const w=wafer(0x9aa6b8,2,.1); w.position.y=1.2; g.add(w);
+    const pad=new THREE.Mesh(new THREE.CylinderGeometry(2.6,2.6,.3,48),M(0x223,{roughness:1})); pad.position.y=.9; g.add(pad);
+    const head=new THREE.Mesh(new THREE.CylinderGeometry(2.1,2.1,.2,48),M(0x445,{roughness:.6})); head.position.y=1.4; g.add(head);
+    let polish=0, smooth=.05;
+    api.addUpdater(dt=>{ pad.rotation.y+=dt*1.5; head.rotation.y-=dt*1.2;
+      w.material.roughness=Math.max(.04,smooth); });
+    api.widget(`<button id="pol">Polish (hold-press repeatedly)</button>
+      <div class="bar" style="width:160px"><i id="pb" style="background:var(--acc)"></i></div>
+      <span class="readout"><b id="ps2">Ra: rough</b></span>`);
+    api.setHint("Click Polish several times. Stop near 100% — over-polishing thins the wafer and wastes it.");
+    disableRun();
+    el('pol').onclick=()=>{ polish=Math.min(120,polish+rnd(14,22)); smooth=Math.max(.04,.55-polish/100*.5);
+      el('pb').style.width=Math.min(100,polish)+'%';
+      el('ps2').textContent = polish<40?"Ra: rough":polish<85?"Ra: smooth":polish<=105?"Ra: mirror ✓":"Ra: over-thinned!";
+      if(polish>=80){ enableRun(); }
+      if(polish>105) el('pb').style.background='var(--bad)'; };
+    api.onRun(()=>{
+      const over=Math.max(0,polish-105), under=Math.max(0,85-polish);
+      const yl=-(over*1.2+under*0.6);
+      finishStage({purity:0, yield:yl, note: over>0?"Over-polished":"Mirror finish"});
+    });
+  }
+},
+{
+  name:"Thermal Oxidation", in:"Bare Si wafer + O₂/H₂O", out:"Wafer with SiO₂ gate/insulation layer",
+  desc:"Heated to ~1000 °C in oxygen or steam, the silicon surface grows its own glass: a precise silicon-dioxide layer. This insulating oxide becomes gate dielectrics and masks. Dry oxidation is slow but high-quality; wet (steam) is faster but rougher.",
+  chem:"Dry:  Si + O₂ → SiO₂            (dense, high quality)\nWet:  Si + 2 H₂O → SiO₂ + 2 H₂   (faster growth)",
+  fact:"Oxide thickness shows up as colour: the rainbow tints on a wafer are thin-film interference from the SiO₂.",
+  build(g,api){
+    const w=wafer(0xb8c4d6,2,.12); w.position.y=1.3; g.add(w);
+    const oxide=new THREE.Mesh(new THREE.CylinderGeometry(2,2,.02,80),
+      new THREE.MeshStandardMaterial({color:0x3366aa,metalness:.6,roughness:.2,transparent:true,opacity:.0}));
+    oxide.position.y=1.37; g.add(oxide);
+    // tube furnace
+    const tube=new THREE.Mesh(new THREE.CylinderGeometry(2.6,2.6,4,40,1,true),
+      new THREE.MeshStandardMaterial({color:0x552,emissive:0x331100,emissiveIntensity:.6,side:THREE.DoubleSide,transparent:true,opacity:.25}));
+    tube.rotation.z=Math.PI/2; tube.position.y=1.35; g.add(tube);
+    let t=0, growth=0;
+    api.addUpdater(dt=>{ w.rotation.y+=dt*.3; tube.material.emissiveIntensity=.5+Math.sin(performance.now()*.004)*.3;});
+    api.widget(`<div class="slider">Time in furnace
+      <input id="ot" type="range" min="0" max="100" step="1" value="0"><span id="otv">0 min</span></div>
+      <span class="readout">Oxide: <b id="ox">0 nm</b></span>`);
+    el('ot').oninput=()=>{ growth=+el('ot').value; el('otv').textContent=growth+" min";
+      const nm=growth*4; el('ox').textContent=nm+" nm";
+      oxide.material.opacity=Math.min(.85,growth/100);
+      // interference-ish color
+      oxide.material.color.setHSL((nm%360)/360,.7,.5);
+      if(growth>=35&&growth<=75){enableRun(); api.setHint("Good gate-oxide window. Proceed.");}
+      else disableRun();
+    };
+    api.setHint("Grow a gate oxide in the 140–300 nm window (≈ 35–75 min). Too thin leaks, too thick is slow/off-spec.");
+    disableRun();
+    api.onRun(()=>{
+      const nm=growth*4, dev=Math.abs(nm-220)/220;
+      finishStage({purity:0, yield:-(dev*30), note:`SiO₂ ≈ ${nm} nm`});
+    });
+  }
+},
+{
+  name:"Photoresist Coating", in:"Oxidized wafer + liquid resist", out:"Resist-coated wafer",
+  desc:"A drop of light-sensitive polymer (photoresist) is spun across the wafer at thousands of RPM, throwing it into an ultra-uniform thin film, then soft-baked. Spin speed sets the thickness: faster = thinner. Uneven coats ruin the pattern later.",
+  chem:"Spin coating: thickness ∝ 1/√(RPM)\nThen soft-bake ~90–100 °C to drive off solvent",
+  fact:"The whole coat-and-pattern dance happens under yellow light — photoresist is blind to yellow, so fabs glow amber.",
+  build(g,api){
+    const chuck=new THREE.Mesh(new THREE.CylinderGeometry(1.9,1.9,.2,48),M(0x334,{roughness:.5})); chuck.position.y=1; g.add(chuck);
+    const w=wafer(0x9fb3c9,2,.1); w.position.y=1.15; g.add(w);
+    const film=new THREE.Mesh(new THREE.CylinderGeometry(2,2,.03,64),
+      new THREE.MeshStandardMaterial({color:0xff4477,emissive:0x330011,roughness:.3,transparent:true,opacity:0})); film.position.y=1.22; g.add(film);
+    // a blob of resist
+    const blob=new THREE.Mesh(new THREE.SphereGeometry(.18,16,16),M(0xff3366,{emissive:0x440011})); blob.position.y=1.35; g.add(blob);
+    let rpm=0, spinning=false, even=0;
+    api.addUpdater(dt=>{ const grp=[chuck,w,film]; grp.forEach(o=>o.rotation.y+=dt*rpm/200);
+      if(spinning){ even=Math.min(1,even+dt*0.6); film.material.opacity=even*.8; blob.scale.setScalar(Math.max(.01,1-even)); }});
+    api.widget(`<div class="slider">Spin speed
+      <input id="rp" type="range" min="500" max="6000" step="100" value="3000"><span id="rpv">3000 rpm</span></div>
+      <button id="spin">Dispense & spin</button>`);
+    el('rp').oninput=()=>{el('rpv').textContent=el('rp').value+" rpm"; rpm=+el('rp').value;}; rpm=3000;
+    api.setHint("~3000–4000 rpm gives a uniform ~1 µm film. Dispense and spin.");
+    disableRun();
+    el('spin').onclick=()=>{ spinning=true; el('spin').disabled=true; toast("Spin-coating…");
+      setTimeout(()=>{enableRun(); api.setHint("Soft-baked and ready for exposure.");},1500);};
+    api.onRun(()=>{
+      const r=+el('rp').value, dev=Math.abs(r-3500)/3500;
+      finishStage({purity:0, yield:-(dev*25), note:`Film ${(1/Math.sqrt(r/3500)).toFixed(2)} µm`});
+    });
+  }
+},
+{
+  name:"Photolithography", in:"Resist wafer + photomask + UV/EUV", out:"Patterned (exposed) resist",
+  desc:"The circuit pattern on a mask (reticle) is projected through a lens onto the resist with deep-UV (193 nm) or extreme-UV (13.5 nm) light. Exposed resist changes solubility. Focus and dose are everything — this single step defines your transistor size.",
+  chem:"Exposure dose (mJ/cm²) + focus → latent image\nResolution ≈ k₁·λ / NA   (smaller λ → smaller features)",
+  fact:"EUV at 13.5 nm is made by zapping molten tin droplets with a laser 50,000 times a second — each machine costs >$150 M.",
+  build(g,api){
+    const w=wafer(0x222,2,.1); w.position.y=1; g.add(w);
+    // projected pattern grid that snaps into focus
+    const pat=new THREE.Group(); pat.position.y=1.07; g.add(pat);
+    const lines=[];
+    for(let i=-8;i<=8;i++){ const m=new THREE.Mesh(new THREE.BoxGeometry(3,.02,.05),
+      new THREE.MeshStandardMaterial({color:0x66e0ff,emissive:0x0a3344,emissiveIntensity:1}));
+      m.position.z=i*0.22; pat.add(m); lines.push(m);}
+    // light cone
+    const cone=new THREE.Mesh(new THREE.ConeGeometry(2.2,3,32,1,true),
+      new THREE.MeshStandardMaterial({color:0x88ddff,transparent:true,opacity:.08,side:THREE.DoubleSide}));
+    cone.position.y=2.7; g.add(cone);
+    let focus=.5, blur=1;
+    api.addUpdater(dt=>{ w.rotation.y+=dt*.05;
+      lines.forEach(m=>{ m.scale.z=1+blur*4; m.material.emissiveIntensity=1-blur*.6; });});
+    api.widget(`<div class="slider">Focus
+      <input id="fc" type="range" min="0" max="100" value="20"><span id="fcv">defocused</span></div>
+      <div class="slider">Dose (mJ/cm²)
+      <input id="ds" type="range" min="5" max="60" value="15"><span id="dsv">15</span></div>
+      <button id="expose">Expose</button>`);
+    const fc=el('fc'),ds=el('ds');
+    fc.oninput=()=>{ blur=Math.abs(50-fc.value)/50; el('fcv').textContent=blur<.12?"in focus ✓":"defocused";};
+    ds.oninput=()=>{el('dsv').textContent=ds.value;};
+    fc.oninput();
+    api.setHint("Center the focus slider (≈50) and use a moderate dose (~25). Then expose.");
+    disableRun();
+    el('expose').onclick=()=>{ if(blur>.15){toast("Pattern blurred — refocus!","var(--bad)");return;}
+      enableRun(); toast("Sharp latent image ✓"); api.setHint("Exposed. On to develop & etch."); };
+    api.onRun(()=>{
+      const dose=+ds.value, dErr=Math.abs(dose-25)/25;
+      const yl=-(blur*40+dErr*20);
+      finishStage({purity:0, yield:yl, note:blur<.12?"CD on target":"Resolution loss"});
+    });
+  }
+},
+{
+  name:"Etching", in:"Patterned wafer + plasma/acid", out:"Etched 3D structure",
+  desc:"Where the resist was removed, the wafer is etched away — transferring the pattern into the oxide/silicon. Wet etching (acids) is isotropic and undercuts; dry plasma (reactive-ion) etching is anisotropic, cutting straight vertical walls needed for tiny features.",
+  chem:"Dry (RIE):  CF₄/SF₆ plasma → volatile SiF₄↑ (vertical walls)\nWet:  SiO₂ + 6 HF → H₂SiF₆ + 2 H₂O (isotropic)",
+  fact:"Modern 'deep' etching (Bosch process) alternates etch and passivation to drill trenches with walls 50× deeper than they are wide.",
+  build(g,api){
+    const w=wafer(0x445,2,.4); w.position.y=1; g.add(w);
+    // trenches that get carved
+    const trenches=new THREE.Group(); g.add(trenches);
+    const tr=[];
+    for(let i=-5;i<=5;i++){ const t=new THREE.Mesh(new THREE.BoxGeometry(3,.01,.12),M(0x05080f));
+      t.position.set(0,1.2,i*0.3); trenches.add(t); tr.push(t);}
+    const plasma=glow(0xaa66ff,2); plasma.position.set(0,2.2,0); g.add(plasma);
+    let mode='dry', depth=0;
+    api.addUpdater(dt=>{ w.rotation.y+=dt*.05; plasma.intensity=2+Math.sin(performance.now()*.01)*.8;});
+    api.widget(`<div class="slider">Etch type
+      <select id="et" style="font-family:var(--mono);background:#0c1830;color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:4px">
+        <option value="dry">Dry plasma (RIE) — anisotropic</option>
+        <option value="wet">Wet (HF) — isotropic</option></select></div>
+      <button id="etch">Etch</button>`);
+    el('et').onchange=()=>mode=el('et').value;
+    api.setHint("For sub-micron lines you need straight walls — choose dry plasma etching.");
+    disableRun();
+    el('etch').onclick=()=>{ depth=1;
+      tr.forEach(t=>{ const w2=mode==='dry'?0.12:0.34; t.geometry.dispose();
+        t.geometry=new THREE.BoxGeometry(3,0.45,w2); t.position.y=1; });
+      toast(mode==='dry'?"Vertical trenches ✓":"Undercut profile…", mode==='dry'?'var(--acc)':'var(--warn)');
+      enableRun(); api.setHint("Pattern transferred. Strip resist and dope.");};
+    api.onRun(()=>{
+      const yl = mode==='dry' ? -3 : -28;
+      finishStage({purity:0, yield:yl, note: mode==='dry'?"Anisotropic profile":"Isotropic undercut"});
+    });
+  }
+},
+{
+  name:"Ion Implantation", in:"Etched wafer + dopant ions", out:"Doped junctions (source/drain, wells)",
+  desc:"Dopant atoms — boron for p-type, phosphorus/arsenic for n-type — are ionized, accelerated to high energy, and fired into the silicon to set its conductivity. Dose sets concentration; energy sets depth. A later anneal heals the lattice and activates the dopants.",
+  chem:"B⁺ → p-type (holes)   ·   P⁺ / As⁺ → n-type (electrons)\nDepth ∝ ion energy (keV) · Dose = ions/cm²",
+  fact:"The p-n junctions you build here are the heart of every transistor and diode — doping is what makes silicon a *semi*conductor.",
+  build(g,api){
+    const w=wafer(0x6677aa,2,.3); w.position.y=1; g.add(w);
+    // ion beam
+    const beam=new THREE.Mesh(new THREE.CylinderGeometry(.06,.4,3,16,1,true),
+      new THREE.MeshStandardMaterial({color:0x66ffaa,emissive:0x118844,transparent:true,opacity:.5,side:THREE.DoubleSide}));
+    beam.position.y=2.6; g.add(beam);
+    const ions=new THREE.InstancedMesh(new THREE.SphereGeometry(.05,6,6),
+      new THREE.MeshStandardMaterial({color:0x88ffcc,emissive:0x33aa66}),30);
+    const id=new THREE.Object3D(), ip=[];
+    for(let i=0;i<30;i++) ip.push({y:rnd(1,4),x:rnd(-.3,.3),z:rnd(-.3,.3)}); g.add(ions);
+    let firing=false, type='B', energy=50, dose=50;
+    api.addUpdater(dt=>{ w.rotation.y+=dt*.05;
+      if(firing) ip.forEach((p,i)=>{ p.y-=dt*4; if(p.y<1.1)p.y=4;
+        id.position.set(p.x,p.y,p.z); id.updateMatrix(); ions.setMatrixAt(i,id.matrix);}); ions.instanceMatrix.needsUpdate=true;});
+    api.widget(`<div class="slider">Dopant
+      <select id="dp" style="font-family:var(--mono);background:#0c1830;color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:4px">
+        <option value="B">Boron (p-type)</option><option value="P">Phosphorus (n-type)</option><option value="As">Arsenic (n-type)</option></select></div>
+      <div class="slider">Energy (keV)<input id="en" type="range" min="5" max="200" value="60"><span id="env">60 keV → depth</span></div>
+      <div class="slider">Dose<input id="do" type="range" min="10" max="100" value="50"><span id="dov">mid</span></div>
+      <button id="fire">Implant</button>`);
+    el('en').oninput=()=>el('env').textContent=el('en').value+" keV";
+    el('do').oninput=()=>el('dov').textContent=el('do').value<35?"low":el('do').value>75?"high":"mid";
+    api.setHint("Pick a dopant and a sensible dose. Fire the beam, then anneal happens automatically.");
+    disableRun();
+    el('fire').onclick=()=>{ firing=true; el('fire').disabled=true; toast(`Implanting ${el('dp').value}⁺…`);
+      w.material.color.set(el('dp').value==='B'?0xaa6688:0x6688cc);
+      setTimeout(()=>{enableRun(); api.setHint("Dopants activated by rapid thermal anneal. Continue.");},1600);};
+    api.onRun(()=>{
+      const d=+el('do').value, dev=Math.abs(d-55)/55;
+      finishStage({purity:0, yield:-(dev*22), note:`${el('dp').value}⁺ junction formed`});
+    });
+  }
+},
+{
+  name:"Deposition (CVD / PVD)", in:"Doped wafer + precursor gases/metal", out:"New conductor/insulator film",
+  desc:"Thin films are built up on top: insulators and the metal wiring that connects transistors. Chemical vapour deposition grows films from reacting gases; physical vapour deposition (sputtering) blasts metal atoms onto the wafer. Copper and tungsten form the interconnects.",
+  chem:"CVD:  SiH₄ → Si + 2 H₂  ·  WF₆ + 3 H₂ → W + 6 HF\nPVD (sputter): Ar⁺ knocks Cu/Al atoms onto wafer",
+  fact:"A modern chip stacks 15+ metal layers of interconnect — if unrolled, the copper wiring in one chip can run tens of kilometres.",
+  build(g,api){
+    const w=wafer(0x556,2,.3); w.position.y=1; g.add(w);
+    const film=new THREE.Mesh(new THREE.CylinderGeometry(2,2,.02,80),M(0xcc8844,{metalness:1,roughness:.25}));
+    film.position.y=1.16; film.scale.y=0.01; g.add(film);
+    const src=glow(0xffaa66,1.5); src.position.set(0,2.4,0); g.add(src);
+    let depo=0;
+    api.addUpdater(dt=>{ w.rotation.y+=dt*.05; });
+    api.widget(`<div class="slider">Film thickness
+      <input id="th" type="range" min="0" max="100" value="0"><span id="thv">0 nm</span></div>
+      <div class="slider">Method
+      <select id="mt" style="font-family:var(--mono);background:#0c1830;color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:4px">
+        <option value="cvd">CVD (conformal)</option><option value="pvd">PVD sputter (metal)</option></select></div>`);
+    el('th').oninput=()=>{ depo=+el('th').value; el('thv').textContent=(depo*5)+" nm";
+      film.scale.y=Math.max(.01,depo/12); film.position.y=1.16+depo/12*.01;
+      if(depo>=40&&depo<=80){enableRun();}else disableRun();};
+    el('mt').onchange=()=>film.material.color.set(el('mt').value==='pvd'?0xddaa66:0xaa99cc);
+    api.setHint("Deposit a 200–400 nm film (slider 40–80). Too thick wastes material and traps stress.");
+    disableRun();
+    api.onRun(()=>{
+      const nm=depo*5, dev=Math.abs(nm-300)/300;
+      finishStage({purity:0, yield:-(dev*20), note:`${el('mt').value.toUpperCase()} film ${nm} nm`});
+    });
+  }
+},
+{
+  name:"CMP — Planarization", in:"Bumpy multilayer wafer", out:"Flat surface for next layer",
+  desc:"After deposition the surface is hilly. Chemical-mechanical planarization grinds it dead flat again with a polishing pad and chemically-active slurry, so the next lithography layer stays in focus. Polish exactly to the target — overshoot removes wiring you need.",
+  chem:"Combined chemical etch + mechanical abrasion (slurry)\nGoal: global planarity within nanometres before next layer",
+  fact:"Stacking dozens of layers is only possible because CMP resets the surface to flat after every single one.",
+  build(g,api){
+    // bumpy surface flattening
+    const geo=new THREE.PlaneGeometry(4,4,40,40); geo.rotateX(-Math.PI/2);
+    const pos=geo.attributes.position; const base=[];
+    for(let i=0;i<pos.count;i++){ const h=rnd(0,.35); base.push(h); pos.setY(i,h);}
+    const surf=new THREE.Mesh(geo,M(0x9988cc,{metalness:.7,roughness:.3,flatShading:true})); surf.position.y=1.2; g.add(surf);
+    const pad=new THREE.Mesh(new THREE.CylinderGeometry(2.4,2.4,.25,48),M(0x223,{roughness:1})); pad.position.y=2; g.add(pad);
+    let flat=0;
+    api.addUpdater(dt=>{ pad.rotation.y+=dt*2; surf.rotation.y+=dt*.6; });
+    api.widget(`<button id="cmp">Polish flat (click to advance)</button>
+      <div class="bar" style="width:160px"><i id="cb" style="background:var(--acc)"></i></div>
+      <span class="readout"><b id="fl">hilly</b></span>`);
+    api.setHint("Click to planarize. Stop right around 100% — past that you grind into the metal below.");
+    disableRun();
+    el('cmp').onclick=()=>{ flat=Math.min(130,flat+rnd(16,24)); pad.position.y=Math.max(1.3,2-flat/100*.6);
+      const k=Math.min(1,flat/100);
+      for(let i=0;i<pos.count;i++) pos.setY(i, base[i]*(1-k)); pos.needsUpdate=true; geo.computeVertexNormals();
+      el('cb').style.width=Math.min(100,flat)+'%';
+      el('fl').textContent=flat<60?"hilly":flat<95?"flattening":flat<=110?"planar ✓":"OVER-POLISHED";
+      if(flat>=90) enableRun(); if(flat>110) el('cb').style.background='var(--bad)';};
+    api.onRun(()=>{
+      const over=Math.max(0,flat-110), under=Math.max(0,95-flat);
+      finishStage({purity:0, yield:-(over*1.5+under*.5), note:over>0?"Dishing/erosion":"Globally planar"});
+    });
+  }
+},
+{
+  name:"Repeat the Layer Stack (BEOL)", in:"One finished layer", out:"Full multilayer interconnect",
+  desc:"A chip isn't one layer — it's dozens. Oxidation → litho → etch → implant/deposit → CMP repeats again and again to stack transistors and the metal wiring that links them (the 'back end of line'). Each added layer multiplies complexity and the chance of a killer defect.",
+  chem:"N × (deposit dielectric → litho → etch vias → fill metal → CMP)\nMore layers = more function, lower yield per added mask",
+  fact:"A leading-edge logic chip can require 80–100+ separate mask layers and months of processing per wafer.",
+  build(g,api){
+    const layers=new THREE.Group(); layers.position.y=.6; g.add(layers);
+    const colors=[0x445,0x668,0x886,0x8a8,0xa88,0x88c,0xc8a];
+    let built=1;
+    function rebuild(n){ while(layers.children.length) layers.remove(layers.children[0]);
+      for(let i=0;i<n;i++){ const m=wafer(colors[i%colors.length],2,.12); m.position.y=i*0.16; layers.add(m);
+        // little vias
+        for(let v=0;v<6;v++){ const a=v/6*6.28; const via=new THREE.Mesh(new THREE.CylinderGeometry(.04,.04,.16,8),M(0xddaa55,{metalness:1}));
+          via.position.set(Math.cos(a)*1.2,i*0.16,Math.sin(a)*1.2); layers.add(via);} } }
+    rebuild(1);
+    api.addUpdater(dt=>{ layers.rotation.y+=dt*.25; });
+    let total=8;
+    api.widget(`<button id="layer">Add a metal layer (+1)</button>
+      <span class="readout">Layers built: <b id="lc">1</b> / ${total}</span>`);
+    api.setHint(`Stack up the interconnect — add ${total} layers. Watch yield drop a little with each (real fabs fight this constantly).`);
+    disableRun();
+    el('layer').onclick=()=>{ if(built>=total) return; built++; rebuild(built); el('lc').textContent=built;
+      state.yield=Math.max(5,state.yield-rnd(1,3)); refreshMeters();
+      if(built>=total){ enableRun(); api.setHint("Full stack built. Time to test the wafer."); }};
+    api.onRun(()=>{ finishStage({purity:0, yield:-2, note:`${built}-layer interconnect`}); });
+  }
+},
+{
+  name:"Wafer Testing (Probe / EWS)", in:"Finished wafer", out:"Wafer map of good/bad dies",
+  desc:"Before cutting, every die is electrically tested in place by a probe card that lands hundreds of needles on the contact pads. Failing dies are inked or logged. This 'wafer sort' yield is the fab's report card — and the edge dies usually fail most.",
+  chem:"Electrical test vectors applied per die at speed/voltage\nYield = good dies / total dies (defects cluster at edge)",
+  fact:"Even a few stray particles per wafer can kill dies; that's why fabs run cleaner than an operating room — class-1 cleanrooms.",
+  build(g,api){
+    const w=wafer(0x223a55,2.2,.1); w.position.y=1; g.add(w);
+    const dies=[]; const grp=new THREE.Group(); grp.position.y=1.06; g.add(grp);
+    for(let x=-4;x<=4;x++)for(let y=-4;y<=4;y++){ const r=Math.hypot(x,y); if(r>4.4) continue;
+      const d=new THREE.Mesh(new THREE.BoxGeometry(.4,.04,.4),M(0x335,{emissive:0x112233}));
+      d.position.set(x*.44,0,y*.44); d.userData={r,tested:false}; grp.add(d); dies.push(d);}
+    // probe
+    const probe=new THREE.Mesh(new THREE.CylinderGeometry(.05,.02,.6,8),M(0xccc,{metalness:1})); probe.position.y=1.5; g.add(probe);
+    let i=0, good=0, total=dies.length, testing=false;
+    api.addUpdater(dt=>{ w.rotation.y+=dt*.02;
+      if(testing && i<dies.length){ const d=dies[i]; probe.position.set(d.position.x,1.4,d.position.z+grp.position.z);
+        if(!d.userData.tested){ d.userData.tested=true;
+          const pass = Math.random() > (0.06 + d.userData.r*0.05) && state.yield>20;
+          d.material.color.set(pass?0x33dd77:0xdd3344); d.material.emissive.set(pass?0x0a4422:0x441111);
+          if(pass) good++; }
+        i++; if(i>=dies.length){ testing=false; el('yr').textContent=Math.round(good/total*100)+"%";
+          enableRun(); api.setHint(`Sort yield ${Math.round(good/total*100)}%. Dice the good dies.`);} }});
+    api.widget(`<button id="probe">Run wafer probe</button>
+      <span class="readout">Good dies: <b id="yr">—</b></span>`);
+    api.setHint("Run the probe to electrically test every die. Edge dies tend to fail.");
+    disableRun();
+    el('probe').onclick=()=>{ testing=true; el('probe').disabled=true; toast("Probing dies…");};
+    api.onRun(()=>{ const sy=Math.round(good/total*100);
+      finishStage({purity:0, yield: sy-100<-40? -5: 0, note:`Sort yield ${sy}%`, hardYield:sy}); });
+  }
+},
+{
+  name:"Dicing", in:"Tested wafer", out:"Individual silicon dies",
+  desc:"The wafer is mounted on adhesive tape and a diamond blade (or laser) cuts along the streets between dies, separating it into hundreds of individual chips. Only the dies that passed probe move on. Chipping or cracking at the saw line scraps good dies.",
+  chem:"Mechanical dicing saw or stealth-laser dicing\nCut only the scribe lines; keep good dies intact",
+  fact:"Modern 'stealth dicing' focuses a laser *inside* the wafer to crack it cleanly along lines, with almost zero kerf or debris.",
+  build(g,api){
+    const w=wafer(0x2a4060,2.1,.08); w.position.y=1; g.add(w);
+    const blade=new THREE.Mesh(new THREE.CylinderGeometry(.5,.5,.03,32),M(0xddd,{metalness:1,roughness:.2}));
+    blade.rotation.z=Math.PI/2; blade.position.set(-3,1.3,0); g.add(blade);
+    let dicing=false, dir=0, cuts=0;
+    const slits=new THREE.Group(); slits.position.y=1.05; g.add(slits);
+    api.addUpdater(dt=>{ blade.rotation.y+=dt*30;
+      if(dicing){ blade.position.x+=dt*3;
+        if(blade.position.x>3){ // lay a cut line
+          const s=new THREE.Mesh(new THREE.BoxGeometry(4.4,.02,.02),M(0x05080f));
+          if(dir%2===0) s.position.z=(cuts-3)*0.55; else { s.rotation.y=Math.PI/2; s.position.x=(cuts-3)*0.55; }
+          slits.add(s); cuts++; blade.position.x=-3;
+          if(cuts>=14){ dicing=false; enableRun(); api.setHint("Wafer singulated into dies. Package them."); }
+          if(cuts===7) dir=1;
+        }}});
+    api.widget(`<button id="dice">Start dicing saw</button>`);
+    api.setHint("Run the saw to cut along every street and singulate the dies.");
+    disableRun();
+    el('dice').onclick=()=>{ dicing=true; el('dice').disabled=true; toast("Dicing wafer…");};
+    api.onRun(()=>{ finishStage({purity:0, yield:-3, note:"Dies singulated"}); });
+  }
+},
+{
+  name:"Packaging", in:"Bare die", out:"Bonded, encapsulated package",
+  desc:"A good die is bonded to a substrate/lead-frame, its pads connected out to the package — by hair-thin gold/copper wire bonds or by flip-chip solder bumps — then encapsulated in epoxy to protect it. The package handles power, signals, and heat to the outside world.",
+  chem:"Die attach → wire-bond (Au/Cu) or flip-chip (solder bumps)\nEpoxy mold compound encapsulation; balls/leads for PCB",
+  fact:"Advanced 2.5D/3D packaging now stacks multiple dies on a silicon interposer — packaging has become as critical as the transistors themselves.",
+  build(g,api){
+    const sub=new THREE.Mesh(new THREE.BoxGeometry(3,.2,3),M(0x1a6b3a,{roughness:.7})); sub.position.y=1; g.add(sub);
+    const die=new THREE.Mesh(new THREE.BoxGeometry(1.4,.18,1.4),M(0x3a5a88,{metalness:.6})); die.position.y=1.2; g.add(die);
+    const wires=new THREE.Group(); g.add(wires); let bonds=0;
+    // bond pads
+    const pads=[]; for(let i=0;i<4;i++){ for(let j=0;j<3;j++){ /*skip*/ } }
+    let molded=false;
+    const mold=new THREE.Mesh(new THREE.BoxGeometry(2.6,.6,2.6),
+      new THREE.MeshStandardMaterial({color:0x111,roughness:.5,transparent:true,opacity:0})); mold.position.y=1.3; g.add(mold);
+    api.addUpdater(dt=>{ wires.rotation.y; });
+    api.widget(`<button id="bond">Add wire bond (×8)</button>
+      <span class="readout">Bonds: <b id="bc">0</b>/8</span>
+      <button id="mold" class="ghost" disabled>Encapsulate</button>`);
+    api.setHint("Bond all 8 leads from die to substrate, then encapsulate in epoxy.");
+    disableRun();
+    el('bond').onclick=()=>{ if(bonds>=8)return; const a=bonds/8*6.28;
+      const x=Math.cos(a)*.7, z=Math.sin(a)*.7, x2=Math.cos(a)*1.3, z2=Math.sin(a)*1.3;
+      const curve=new THREE.QuadraticBezierCurve3(
+        new THREE.Vector3(x,1.32,z), new THREE.Vector3((x+x2)/2,1.7,(z+z2)/2), new THREE.Vector3(x2,1.1,z2));
+      const tube=new THREE.Mesh(new THREE.TubeGeometry(curve,16,.02,6),M(0xffcc44,{metalness:1,roughness:.2}));
+      wires.add(tube); bonds++; el('bc').textContent=bonds;
+      if(bonds>=8){ el('mold').disabled=false; toast("All leads bonded ✓"); }};
+    el('mold').onclick=()=>{ molded=true; let o=0; const iv=setInterval(()=>{o+=.05; mold.material.opacity=o;
+      if(o>=.92){clearInterval(iv); enableRun(); api.setHint("Encapsulated. Final test & ship!");}},30);};
+    api.onRun(()=>{ finishStage({purity:0, yield: molded?0:-15, note: molded?"Wire-bonded & molded":"Unencapsulated!"}); });
+  }
+},
+{
+  name:"Final Chip — Test & Ship", in:"Packaged part", out:"Qualified product",
+  desc:"Final test runs the packaged chip at speed across voltage and temperature, then it's burned-in, marked, and binned by performance. From a few grams of quartz you've built a working integrated circuit — through ~18 of the same steps a real fab runs, just thousands of times over.",
+  chem:"Final/ATE test → burn-in → laser mark → speed binning\nShip qualified, traceable parts",
+  fact:"The journey you just ran takes a real fab 3+ months and 1000+ process steps per wafer — for a single generation of chip.",
+  build(g,api){
+    const chip=new THREE.Mesh(new THREE.BoxGeometry(2.2,.4,2.2),M(0x111,{roughness:.4,metalness:.3})); chip.position.y=1.4; g.add(chip);
+    const dieTop=new THREE.Mesh(new THREE.BoxGeometry(1.2,.06,1.2),M(0x2a4a7a,{metalness:.8,roughness:.2})); dieTop.position.y=1.63; g.add(chip.add(dieTop)||dieTop);
+    // legs
+    for(let i=0;i<10;i++){ const a=i/10*6.28; const leg=new THREE.Mesh(new THREE.BoxGeometry(.1,.1,.4),M(0xccc,{metalness:1}));
+      leg.position.set(Math.cos(a)*1.3,1.2,Math.sin(a)*1.3); leg.lookAt(0,1.2,0); g.add(leg);}
+    const halo=glow(0x34e0c0,2); halo.position.set(0,2.4,0); g.add(halo);
+    api.addUpdater(dt=>{ chip.rotation.y+=dt*.5; halo.intensity=2+Math.sin(performance.now()*.003)*1;});
+    api.widget(`<button id="ship">Run final test & ship 🚀</button>`);
+    api.setHint("Run the final test to grade your chip on everything you did.");
+    el('ship').onclick=()=>{ enableRun(); el('ship').disabled=true; };
+    api.onRun(()=>{ finishStage({purity:0, yield:0, note:"Qualified & shipped", final:true}); });
+  }
+}
+];
+
+/* ============================ FLOW CONTROL ============================ */
+let currentAPI=null;
+function gainPurity(p,why){ if(p>0){ state.purity=Math.max(state.purity,p); refreshMeters(); } }
+function enableRun(){ el('next').disabled=false; el('next').classList.remove('ghost'); }
+function disableRun(){ el('next').disabled=true; el('next').classList.add('ghost'); }
+
+const pipsWrap=el('stagepips');
+STAGES.forEach((s,i)=>{ const p=document.createElement('div'); p.className='pip'; p.textContent=i+1; p.title=s.name; pipsWrap.appendChild(p);});
+
+function renderPips(){ [...pipsWrap.children].forEach((p,i)=>{ p.className='pip'+(i<state.stage?' done':i===state.stage?' active':''); }); }
+
+function loadStage(i){
+  if(currentAPI&&currentAPI._cleanup) currentAPI._cleanup();
+  clearStage();
+  const s=STAGES[i];
+  el('pnum').textContent=String(i+1).padStart(2,'0')+"/"+STAGES.length;
+  el('ptitle').textContent=s.name;
+  el('pin').innerHTML="IN: <b>"+s.in+"</b>";
+  el('pout').innerHTML="OUT: <b>"+s.out+"</b>";
+  el('pdesc').textContent=s.desc;
+  el('pchem').textContent=s.chem;
+  el('pfact').textContent=s.fact;
+  el('score').textContent="";
+  el('next').textContent= i===STAGES.length-1 ? "Finish ▸" : "Run step ▸";
+  disableRun();
+  W.innerHTML="";
+  currentAPI=makeAPI();
+  s.build(stageGroup, currentAPI);
+  renderPips();
+  // frame camera
+  controls.target.set(0,1.4,0);
+  refreshMeters();
+}
+
+function finishStage({purity,yield:yl,note,final,hardYield}){
+  if(yl) { state.yield=Math.max(0,Math.min(100,state.yield+yl)); }
+  if(hardYield!=null){ state.yield=Math.min(state.yield, 40+hardYield*0.6); }
+  refreshMeters();
+  const stepScore = Math.round((state.purity*0.4 + state.yield*0.6));
+  el('score').textContent = (yl?(yl>0?"+":"")+Math.round(yl)+"% yield · ":"")+ note;
+  state.stage++;
+  if(final || state.stage>=STAGES.length){ return showOutro(); }
+  // turn Next into advance
+  disableRun(); enableRun();
+  el('next').textContent="Continue ▸";
+  toast(note+" — purity "+Math.round(state.purity)+"%, yield "+Math.round(state.yield)+"%");
+}
+
+// Next button: either run the step's action, or advance after it's finished
+el('next').onclick=()=>{
+  // if the stage has incremented past current loaded, advance
+  if(state.stage > loadedIndex){ loadedIndex=state.stage; loadStage(state.stage); return; }
+  currentAPI._run();
+};
+
+let loadedIndex=0;
+
+function showOutro(){
+  const grade = state.yield>85?"S — flawless run":state.yield>70?"A — production-ready":
+    state.yield>50?"B — shippable":state.yield>30?"C — marginal yield":"D — scrapped lot";
+  const ov=el('overlay'); ov.classList.remove('hide');
+  ov.innerHTML=`<h1>CHIP SHIPPED</h1>
+    <p>You ran all ${STAGES.length} real fab steps — from quartz sand to a packaged integrated circuit.</p>
+    <p style="font-family:var(--mono);font-size:15px">
+      Final purity: <b style="color:var(--acc)">${Math.round(state.purity)}%</b> ·
+      Final yield: <b style="color:var(--good)">${Math.round(state.yield)}%</b></p>
+    <h2 style="margin:6px 0;color:var(--acc2)">Grade: ${grade}</h2>
+    <p style="font-size:13px">Real fabs repeat these same physics thousands of times over ~3 months per wafer.</p>
+    <button id="again" class="big">↻ Run a new lot</button>`;
+  el('again').onclick=()=>location.reload();
+}
+
+/* ============================ BOOT ============================ */
+el('start').onclick=()=>{
+  el('overlay').classList.add('hide');
+  state.stage=0; loadedIndex=0; refreshMeters();
+  loadStage(0);
+};
+refreshMeters();
+</script>
+</body>
+</html>
