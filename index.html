@@ -71,8 +71,38 @@
   #overlay h1{font-size:42px;margin:0;letter-spacing:6px;
     background:linear-gradient(90deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
   #overlay p{max-width:620px;color:var(--dim);line-height:1.6;font-size:15px}
-  #overlay .big{font-size:16px;padding:13px 34px;margin-top:10px}
+  .big{font-size:16px;padding:13px 34px;margin-top:10px}
   .hide{display:none!important}
+
+  /* ===== screens: Hauptmenü / Platzhalter / Abspann ===== */
+  .screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;pointer-events:auto;padding:28px;z-index:25;
+    background:radial-gradient(circle at 50% 40%, rgba(16,26,46,.80), rgba(6,10,18,.95))}
+  #menu{z-index:28}
+  .logo-badge{width:150px;height:150px;border-radius:32px;overflow:hidden;background:#fff;
+    box-shadow:0 0 0 1px #ffffff22, 0 18px 50px #000a, 0 0 60px #1f63c855, 0 0 90px #f5931233}
+  .logo-badge img{width:100%;height:100%;object-fit:cover;display:block}
+  .brand-title{font-size:46px;font-weight:800;letter-spacing:.5px;margin:18px 0 2px;
+    background:linear-gradient(90deg,#3f8ae8 0%,#5aa9ff 36%,#ffb454 72%,#f5931a 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .brand-sub{color:var(--dim);font-size:14px;max-width:460px;line-height:1.55;margin:2px 0 26px}
+  .menu-cards{display:flex;gap:18px;flex-wrap:wrap;justify-content:center;max-width:760px}
+  .card{pointer-events:auto;cursor:pointer;width:332px;text-align:left;border-radius:16px;padding:20px 22px;
+    background:linear-gradient(160deg,#15233f,#0c1424);border:1px solid #24385c;transition:.18s;
+    display:flex;flex-direction:column;gap:5px;position:relative;overflow:hidden}
+  .card:hover{transform:translateY(-3px);border-color:var(--acc);box-shadow:0 16px 40px #0009}
+  .card.factory:hover{border-color:#f5931a;box-shadow:0 16px 40px #0009,0 0 34px #f5931a33}
+  .card .ic{font-size:30px;line-height:1}
+  .card h3{margin:4px 0 0;font-size:19px;color:var(--txt)}
+  .card p{margin:0;font-size:12.5px;color:var(--dim);line-height:1.45}
+  .card .go{margin-top:8px;font-family:var(--mono);font-size:11px;color:var(--acc);letter-spacing:1px}
+  .card.factory .go{color:#f5931a}
+  .badge-soon{position:absolute;top:13px;right:13px;font-family:var(--mono);font-size:9px;letter-spacing:1.5px;
+    background:#f5931a22;color:#ffb454;border:1px solid #f5931a66;padding:3px 9px;border-radius:20px}
+  .menu-foot{margin-top:30px;font-family:var(--mono);font-size:10px;color:#44597a;letter-spacing:2px}
+  .back-btn{position:fixed;top:18px;left:18px;z-index:40}
+  #to-menu{font-size:12px;padding:6px 13px}
+  #logo .logo-img{height:26px;width:26px;border-radius:7px;object-fit:cover;background:#fff;vertical-align:middle;margin-right:4px}
   .toast{position:fixed;top:64px;left:50%;transform:translateX(-50%);background:var(--panel);
     border:1px solid var(--acc);color:var(--txt);padding:10px 20px;border-radius:10px;font-size:13px;
     z-index:30;box-shadow:0 10px 30px #0008;animation:pop .3s}
@@ -81,9 +111,10 @@
 </style>
 </head>
 <body>
-<div id="ui">
+<div id="ui" class="hide">
   <div id="top">
-    <div id="logo">◆ FAB <small>sand → silizium</small></div>
+    <button id="to-menu" class="ghost">☰ Menü</button>
+    <div id="logo"><img class="logo-img" src="LMGTECHlogo.png" alt=""> Chiptorio <small>· Halbleiter</small></div>
     <div id="stagepips"></div>
     <div id="meters">
       <div class="meter"><b>REINHEIT</b><div class="bar"><i id="m-pure" style="background:var(--acc)"></i></div></div>
@@ -110,8 +141,33 @@
   </div>
 </div>
 
-<div id="overlay">
-  <h1>FAB</h1>
+<!-- HAUPTMENÜ -->
+<div id="menu" class="screen">
+  <div class="logo-badge"><img src="LMGTECHlogo.png" alt="LMG TECH"></div>
+  <h1 class="brand-title">Chiptorio: Halbleiter</h1>
+  <p class="brand-sub">Vom Sandkorn zum fertigen Computerchip — lerne, wie Halbleiter entstehen, und baue deine eigene Chipfabrik.</p>
+  <div class="menu-cards">
+    <div class="card" id="btn-learn">
+      <div class="ic">🔬</div>
+      <h3>Wie entstehen Halbleiter?</h3>
+      <p>Spiele die 18 echten Fertigungsschritte vom Quarzsand bis zum verpackten Chip durch — mit Reinheit &amp; Ausbeute als Wertung.</p>
+      <div class="go">▸ Lernmodus starten</div>
+    </div>
+    <div class="card factory" id="btn-factory">
+      <span class="badge-soon">BALD</span>
+      <div class="ic">🏭</div>
+      <h3>Fabrik bauen</h3>
+      <p>Baue eine Chipfabrik im Fließband-Stil: Rohstoffe richtig kombinieren und dabei Energie, Wasser und Material im Blick behalten.</p>
+      <div class="go">▸ In Entwicklung</div>
+    </div>
+  </div>
+  <div class="menu-foot">◆ LMG TECH</div>
+</div>
+
+<!-- INTRO: Lernmodus -->
+<div id="overlay" class="hide">
+  <button class="back-btn ghost" id="intro-back">← Hauptmenü</button>
+  <h1 style="font-size:30px">Wie entstehen Halbleiter?</h1>
   <p><b>Vom Sand zum Silizium.</b> Betreibe eine echte Halbleiterfabrik — vom rohen Quarz bis zum verpackten Chip.
   Jeder der 18 Schritte ist ein echter Fertigungsprozess — mit echter Chemie, echten Temperaturen und echten Werkzeugen.
   Optimiere jeden Prozess auf maximale <span style="color:var(--acc)">Reinheit</span> und
@@ -119,6 +175,24 @@
   <p style="font-size:13px">Ziehen zum Drehen · Scrollen zum Zoomen · stelle die Regler ein und führe jeden Schritt aus.</p>
   <button id="start" class="big">▶ Fertigung starten</button>
 </div>
+
+<!-- PLATZHALTER: Fabrik bauen -->
+<div id="coming" class="screen hide">
+  <button class="back-btn ghost" id="coming-back">← Hauptmenü</button>
+  <div class="ic" style="font-size:64px">🏭</div>
+  <h1 class="brand-title" style="font-size:34px">Fabrik bauen</h1>
+  <p class="brand-sub" style="max-width:580px">
+    Hier entsteht der Hauptteil von <b>Chiptorio</b>: ein Aufbauspiel im Fließband-Stil (wie Factorio).
+    Du legst Förderbänder, verbindest Maschinen und baust aus Rohstoffen Schritt für Schritt echte Chips —
+    und musst dabei <b style="color:var(--acc2)">Energie</b>, <b style="color:var(--acc)">Wasser</b> und
+    <b style="color:var(--warn)">Rohstoffe</b> klug verwalten.
+  </p>
+  <p style="font-family:var(--mono);color:#f5931a;font-size:13px">🚧 Noch in Entwicklung — bald verfügbar.</p>
+  <button class="big" id="coming-back2">← Zurück zum Hauptmenü</button>
+</div>
+
+<!-- ABSPANN -->
+<div id="outro" class="screen hide"></div>
 
 <script type="importmap">
 { "imports": {
@@ -877,24 +951,43 @@ let loadedIndex=0;
 function showOutro(){
   const grade = state.yield>85?"S — fehlerfreier Lauf":state.yield>70?"A — produktionsreif":
     state.yield>50?"B — lieferbar":state.yield>30?"C — grenzwertige Ausbeute":"D — verschrotteter Posten";
-  const ov=el('overlay'); ov.classList.remove('hide');
-  ov.innerHTML=`<h1>CHIP VERSANDT</h1>
-    <p>Du hast alle ${STAGES.length} echten Fab-Schritte gefahren — vom Quarzsand bis zum verpackten integrierten Schaltkreis.</p>
+  el('outro').innerHTML=`
+    <h1 class="brand-title" style="font-size:36px">CHIP VERSANDT</h1>
+    <p class="brand-sub" style="max-width:600px">Du hast alle ${STAGES.length} echten Fab-Schritte gefahren — vom Quarzsand bis zum verpackten integrierten Schaltkreis.</p>
     <p style="font-family:var(--mono);font-size:15px">
       End-Reinheit: <b style="color:var(--acc)">${Math.round(state.purity)} %</b> ·
       End-Ausbeute: <b style="color:var(--good)">${Math.round(state.yield)} %</b></p>
-    <h2 style="margin:6px 0;color:var(--acc2)">Note: ${grade}</h2>
-    <p style="font-size:13px">Echte Fabs wiederholen genau diese Physik tausendfach über ~3 Monate pro Wafer.</p>
-    <button id="again" class="big">↻ Neuen Posten fahren</button>`;
-  el('again').onclick=()=>location.reload();
+    <h2 style="margin:8px 0;color:var(--acc2)">Note: ${grade}</h2>
+    <p style="font-size:13px;color:var(--dim)">Echte Fabriken wiederholen genau diese Physik tausendfach über ~3 Monate pro Wafer.</p>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:10px">
+      <button id="again" class="big">↻ Nochmal spielen</button>
+      <button id="to-menu2" class="big ghost">← Hauptmenü</button>
+    </div>`;
+  show('outro');
+  el('again').onclick=()=>{ clearStage(); show(null); resetGame(); loadStage(0); };
+  el('to-menu2').onclick=()=>{ clearStage(); show('menu'); };
 }
 
-/* ============================ BOOT ============================ */
+/* ============================ SCREENS / BOOT ============================ */
+const SCREENS=['menu','overlay','coming','outro'];
+function show(id){ SCREENS.forEach(s=>el(s).classList.add('hide')); if(id) el(id).classList.remove('hide');
+  el('ui').classList.toggle('hide', !!id); } // HUD nur im Spiel sichtbar (id===null)
+function resetGame(){ state.purity=5; state.yield=100; state.stage=0; loadedIndex=0; refreshMeters(); }
+
+el('btn-learn').onclick    = ()=> show('overlay');
+el('btn-factory').onclick  = ()=> show('coming');
+el('coming-back').onclick  = ()=> show('menu');
+el('coming-back2').onclick = ()=> show('menu');
+el('intro-back').onclick   = ()=> show('menu');
+el('to-menu').onclick       = ()=>{ clearStage(); show('menu'); };
+
 el('start').onclick=()=>{
-  el('overlay').classList.add('hide');
-  state.stage=0; loadedIndex=0; refreshMeters();
+  show(null);            // alle Overlays aus → Spiel-HUD sichtbar
+  resetGame();
   loadStage(0);
 };
+
+show('menu');
 refreshMeters();
 </script>
 </body>
