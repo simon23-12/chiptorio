@@ -28,9 +28,10 @@
   #speedctl{gap:4px}
   .spd{cursor:pointer;font-family:var(--mono);font-size:11px;color:var(--dim);padding:2px 6px;border-radius:6px;border:1px solid transparent}
   .spd:hover{color:var(--txt)} .spd.sel{background:#0c2b27;border-color:var(--acc);color:var(--acc)}
-  #back{pointer-events:auto;font-family:var(--sans);font-weight:600;font-size:12px;cursor:pointer;
+  #back,#music-btn{pointer-events:auto;font-family:var(--sans);font-weight:600;font-size:12px;cursor:pointer;
     border:1px solid #33486e;background:transparent;color:var(--dim);padding:7px 12px;border-radius:9px}
-  #back:hover{background:#16223a;color:var(--txt)}
+  #back:hover,#music-btn:hover{background:#16223a;color:var(--txt)}
+  #music-btn{padding:7px 10px}
   #title{font-family:var(--mono);font-weight:700;letter-spacing:2px;color:var(--orange);font-size:14px;margin-right:4px}
 
   /* supplies panel (right) */
@@ -97,6 +98,7 @@
 <div id="ui">
   <div id="top">
     <button id="back">← Hauptmenü</button>
+    <button id="music-btn" class="ghost" title="Musik an/aus">🔊</button>
     <span id="title">CHIPTORIO · FABRIK</span>
     <div class="stat"><span class="lbl">GELD</span><b id="s-money" style="color:var(--good)">—</b></div>
     <div class="stat"><span class="lbl">⚡ STROM (kWh)</span><b id="s-power">—</b></div>
@@ -125,10 +127,11 @@
 
 <div id="intro">
   <h1>🏭 Fabrik bauen</h1>
-  <p style="color:var(--dim);max-width:560px;margin:0">Baue die Lieferkette vom Quarzsand bis zum Chip. Verbinde die Maschinen mit Förderbändern und halte Strom, Wasser, Rohstoffe und Geld im Gleichgewicht.</p>
+  <p style="color:var(--dim);max-width:560px;margin:0">Baue die Lieferkette vom Quarzsand bis zum fertigen Chip. Verbinde die Maschinen mit Förderbändern und halte Strom, Wasser, Rohstoffe und Geld im Gleichgewicht.</p>
   <div class="chain" id="chaintext"></div>
-  <p class="ctrl"><b>Steuerung:</b> &nbsp;<kbd>Linksklick</kbd> bauen · <kbd>Ziehen</kbd> Kamera drehen · Förderband/Abriss <kbd>ziehen</kbd> zum Verlegen · <kbd>R</kbd> drehen · <kbd>Rechtsklick</kbd> abreißen · Werkzeuge <kbd>1</kbd>–<kbd>0</kbd>/<kbd>C</kbd>/<kbd>B</kbd>/<kbd>W</kbd>/<kbd>N</kbd> · <kbd>i</kbd> Infos · <kbd>T</kbd> Tipp · <kbd>Mausrad</kbd> zoomen<br>
-  <b style="color:var(--orange)">Neu:</b> Gebäude mit Strombedarf brauchen 🔌 <b>Stromkabel</b> zum Kraftwerk · Tempo oben rechts · beim Überfahren der Bauleiste erscheinen Infos</p>
+  <p class="ctrl"><b>Steuerung:</b> &nbsp;<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> bewegen · <kbd>R</kbd> Ansicht 90° drehen · <kbd>Mausrad</kbd> zoomen · <kbd>Ziehen</kbd> Kamera drehen<br>
+  <kbd>Linksklick</kbd> bauen · Förderband/Abriss <kbd>ziehen</kbd> zum Verlegen · <kbd>Q</kbd> Bauteil drehen · <kbd>Rechtsklick</kbd> abreißen · <kbd>i</kbd> Infos · <kbd>T</kbd> Tipp<br>
+  <b style="color:var(--orange)">Hinweis:</b> Bauteile wählst du per <b>Mausklick</b> in der unteren Leiste. Gebäude mit Strombedarf brauchen 🔌 <b>Stromkabel</b> zum Kraftwerk.</p>
   <button class="big" id="startbtn">▶ Fabrik starten</button>
 </div>
 
@@ -214,7 +217,7 @@ const RECIPES = {
 const CHIP_PRICE = 150;
 // Sandgrube/Kohlemine/Wasserpumpe sind NICHT baubar — sie werden beim Start zufällig auf der Karte verteilt.
 const TOOLS = ["belt","cable","solar","battery","wtank","nuclear","furnace","siemens","crystal","waferplant","fab","packaging","seller","delete"];
-const KEYMAP = {"1":"belt","c":"cable","2":"solar","b":"battery","w":"wtank","n":"nuclear","6":"furnace","7":"siemens","8":"crystal","9":"waferplant","0":"fab","p":"packaging","v":"seller","x":"delete"};
+const KEYMAP = {}; // Bauteile werden per Mausklick in der Leiste gewählt — keine Hotkeys (Tasten gehören der Navigation)
 
 const DAYLEN = 100; // Sekunden pro Tag/Nacht-Zyklus
 const game = { money:3000, chips:0, powerGen:0, powerDemand:0, waterGen:0, waterDemand:0, powerOK:true, waterOK:true, rate:0, soldWindow:[],
@@ -545,6 +548,7 @@ function removeAt(x,z){
 
 /* ===================== EINGABE ===================== */
 let tool = "belt", placeDir = 1, hoverTile=null, laying=false, lastTile=null, downX=0,downY=0,dragged=false, labelsOn=false;
+const pressed={}; // gedrückte WASD-Tasten für Kamerafahrt
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
 function pickTile(e){
   ndc.x=(e.clientX/innerWidth)*2-1; ndc.y=-(e.clientY/innerHeight)*2+1;
@@ -576,14 +580,29 @@ window.addEventListener('pointerup',e=>{
   if(e.button===0 && !dragged){ const t=pickTile(e); if(t) applyTool(t); }
 });
 dom.addEventListener('contextmenu',e=>{ e.preventDefault(); const t=pickTile(e); if(t) removeAt(t.x,t.z); });
+const _yAxis=new THREE.Vector3(0,1,0);
+function rotateView(deg){ const off=camera.position.clone().sub(controls.target); off.applyAxisAngle(_yAxis, deg*Math.PI/180); camera.position.copy(controls.target).add(off); }
+function panCamera(dt){
+  let mx=0,mz=0;
+  if(pressed['w'])mz-=1; if(pressed['s'])mz+=1; if(pressed['a'])mx-=1; if(pressed['d'])mx+=1;
+  if(!mx && !mz) return;
+  const fwd=new THREE.Vector3(); camera.getWorldDirection(fwd); fwd.y=0; if(fwd.lengthSq()<1e-4) return; fwd.normalize();
+  const right=new THREE.Vector3().crossVectors(fwd,_yAxis).normalize();
+  const move=new THREE.Vector3().addScaledVector(fwd,-mz).addScaledVector(right,mx);
+  if(move.lengthSq()>0){ move.normalize().multiplyScalar(13*dt);
+    camera.position.add(move); controls.target.add(move);
+    const lim=N/2+5; controls.target.x=Math.max(-lim,Math.min(lim,controls.target.x)); controls.target.z=Math.max(-lim,Math.min(lim,controls.target.z)); }
+}
 addEventListener('keydown',e=>{
   const key=e.key.toLowerCase();
-  if(key==="r"){ placeDir=(placeDir+1)%4; updateGhost(); }
+  if(key==="w"||key==="a"||key==="s"||key==="d"){ pressed[key]=true; return; }
+  if(key==="r"){ rotateView(90); }
+  else if(key==="q"){ placeDir=(placeDir+1)%4; updateGhost(); }
   else if(key==="i"){ labelsOn=!labelsOn; updateLabels(); toast(labelsOn?"Gebäude-Infos: AN (i)":"Gebäude-Infos: AUS (i)",0x34e0c0); }
   else if(key==="t"){ showTip(); }
-  else if(KEYMAP[key]){ selectTool(KEYMAP[key]); }
   else if(key==="escape"){ document.getElementById('intro').classList.add('hide'); }
 });
+addEventListener('keyup',e=>{ const key=e.key.toLowerCase(); if(key in pressed) delete pressed[key]; });
 
 /* Ghost-Vorschau */
 let ghost=null;
@@ -794,6 +813,7 @@ function loop(){
   // Belt-Pfeile pulsieren
   const pulse=.6+.4*Math.sin(performance.now()*.006);
   for(const b of buildings){ if(b.kind==="belt"&&b.mesh.userData.arrow) b.mesh.userData.arrow.material.emissiveIntensity=pulse; }
+  panCamera(dt);
   controls.update();
   renderer.render(scene,camera);
 }
@@ -801,15 +821,10 @@ loop();
 
 /* ===================== INIT ===================== */
 document.getElementById('chaintext').innerHTML =
- `<span style="color:var(--acc)">Rohstoffquellen (⛏️ Sand · ⚫ Kohle · 💧 Wasser) sind bereits auf der Karte verteilt — verbinde sie mit 🔌 Kabeln &amp; ➤ Förderbändern.</span>\n\n`+
- `⛏️ Quarzsand &nbsp;+&nbsp; ⚫ Kohle\n`+
- `&nbsp;&nbsp;↳ 🔥 <b>Lichtbogenofen</b> (Strom) → Rohsilizium\n`+
- `&nbsp;&nbsp;↳ ⚗️ <b>Siemens-Reaktor</b> (HCl, H₂) → Reinst-Silizium\n`+
- `&nbsp;&nbsp;↳ 💎 <b>Kristallzieher</b> (Argon) → Barren\n`+
- `&nbsp;&nbsp;↳ 🥞 <b>Wafer-Werk</b> (Wasser) → Wafer\n`+
- `&nbsp;&nbsp;↳ 🔬 <b>Frontend-Fab</b> (O₂, Photoresist, Dotierstoffe, Gase, Kupfer, Wasser) → Struktur-Wafer\n`+
- `&nbsp;&nbsp;↳ 📦 <b>Packaging</b> (Epoxidharz) → Chip\n`+
- `&nbsp;&nbsp;↳ 🚚 <b>Versand</b> → 💰 +${CHIP_PRICE}`;
+ `<span style="color:var(--acc)">Rohstoffquellen (⛏️ Sand · ⚫ Kohle · 💧 Wasser) sind bereits auf der Karte verteilt.</span>\n\n`+
+ `Finde selbst heraus, in welcher Reihenfolge die Maschinen aus Sand einen Chip machen!\n`+
+ `Fahre mit der Maus über die <b>Bauleiste</b>, um zu sehen, was jedes Gebäude braucht und herstellt.\n`+
+ `Taste <b>T</b> gibt dir jederzeit einen Tipp, was als Nächstes sinnvoll ist.`;
 /* ===================== ROHSTOFFE ZUFÄLLIG VERTEILEN ===================== */
 function addPatch(kind,x,z){ // Boden-Markierung für das Vorkommen
   const col = kind==="sandmine"?0xc4a661 : kind==="coalmine"?0x1c1c1c : 0x2f7fb0;
@@ -837,8 +852,18 @@ function scatterResources(){
 buildHotbar(); buildSupplies(); selectTool("belt"); scatterResources();
 document.querySelectorAll('#speedctl .spd').forEach(el=>{ el.onclick=()=>{ game.speed=+el.dataset.s;
   document.querySelectorAll('#speedctl .spd').forEach(e=>e.classList.toggle('sel', e===el)); }; });
-document.getElementById('back').onclick=()=>location.href='index.html';
-document.getElementById('startbtn').onclick=()=>{ document.getElementById('intro').classList.add('hide'); started=true; toast("Sand, Kohle & Wasser liegen schon auf der Karte ✦ baue ☀️ Solar, verlege 🔌 Kabel & ➤ Bänder. Taste T = Tipp.",0x34e0c0); };
+/* ===================== HINTERGRUNDMUSIK (track1–5) ===================== */
+const TRACKS=["track1.mp3","track2.mp3","track3.mp3","track4.mp3","track5.mp3"];
+const musicEl=new Audio(); musicEl.volume=.45; let trackIdx=Math.floor(Math.random()*TRACKS.length);
+let musicOn = localStorage.getItem('chiptorio-music')!=='off';
+function playTrack(){ musicEl.src=TRACKS[trackIdx]; const p=musicEl.play(); if(p&&p.catch) p.catch(()=>{}); }
+musicEl.addEventListener('ended',()=>{ trackIdx=(trackIdx+1)%TRACKS.length; playTrack(); });
+function updateMusicBtn(){ document.getElementById('music-btn').textContent=musicOn?'🔊':'🔇'; }
+document.getElementById('music-btn').onclick=()=>{ musicOn=!musicOn; localStorage.setItem('chiptorio-music',musicOn?'on':'off'); if(musicOn) playTrack(); else musicEl.pause(); updateMusicBtn(); };
+updateMusicBtn();
+
+document.getElementById('back').onclick=()=>{ musicEl.pause(); location.href='index.html'; };
+document.getElementById('startbtn').onclick=()=>{ document.getElementById('intro').classList.add('hide'); started=true; if(musicOn) playTrack(); toast("Sand, Kohle & Wasser liegen schon auf der Karte ✦ baue ☀️ Solar, verlege 🔌 Kabel & ➤ Bänder. Taste T = Tipp.",0x34e0c0); };
 </script>
 </body>
 </html>
