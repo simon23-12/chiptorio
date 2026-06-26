@@ -212,8 +212,9 @@ const RECIPES = {
   packaging: {in:{pwafer:1}, sup:{epoxy:1}, out:"chip", time:2.6},
 };
 const CHIP_PRICE = 150;
-const TOOLS = ["belt","cable","sandmine","coalmine","solar","pump","battery","wtank","nuclear","furnace","siemens","crystal","waferplant","fab","packaging","seller","delete"];
-const KEYMAP = {"1":"belt","c":"cable","2":"sandmine","3":"coalmine","4":"solar","5":"pump","b":"battery","w":"wtank","n":"nuclear","6":"furnace","7":"siemens","8":"crystal","9":"waferplant","0":"fab","p":"packaging","v":"seller","x":"delete"};
+// Sandgrube/Kohlemine/Wasserpumpe sind NICHT baubar — sie werden beim Start zufällig auf der Karte verteilt.
+const TOOLS = ["belt","cable","solar","battery","wtank","nuclear","furnace","siemens","crystal","waferplant","fab","packaging","seller","delete"];
+const KEYMAP = {"1":"belt","c":"cable","2":"solar","b":"battery","w":"wtank","n":"nuclear","6":"furnace","7":"siemens","8":"crystal","9":"waferplant","0":"fab","p":"packaging","v":"seller","x":"delete"};
 
 const DAYLEN = 100; // Sekunden pro Tag/Nacht-Zyklus
 const game = { money:3000, chips:0, powerGen:0, powerDemand:0, waterGen:0, waterDemand:0, powerOK:true, waterOK:true, rate:0, soldWindow:[],
@@ -511,25 +512,29 @@ function updateIndicators(){
 
 /* ===================== BAUEN / ABREISSEN ===================== */
 function cellsFor(kind,x,z){ const sz=DEF[kind].size||[1,1]; const c=[]; for(let i=0;i<sz[0];i++)for(let j=0;j<sz[1];j++)c.push([x+i,z+j]); return c; }
-function place(kind,x,z){
+function place(kind,x,z,free){
   const cells=cellsFor(kind,x,z);
-  for(const [cx,cz] of cells){ if(!inBounds(cx,cz)) return; }
+  for(const [cx,cz] of cells){ if(!inBounds(cx,cz)) return false; }
   const ex = grid_.get(k(x,z));
-  if((kind==="belt"||kind==="cable") && ex && ex.kind===kind){ ex.dir=placeDir; ex.mesh.rotation.y=ROT[placeDir]; return; }
-  for(const [cx,cz] of cells){ if(grid_.get(k(cx,cz))) return; } // Feld belegt
-  const cost = DEF[kind].cost;
-  if(game.money < cost){ toast("Zu wenig Geld für "+DEF[kind].name+" ("+cost+" 💵)",0xff5d6c); return; }
-  game.money -= cost;
+  if((kind==="belt"||kind==="cable") && ex && ex.kind===kind){ ex.dir=placeDir; ex.mesh.rotation.y=ROT[placeDir]; return true; }
+  for(const [cx,cz] of cells){ if(grid_.get(k(cx,cz))) return false; } // Feld belegt
+  if(!free){
+    const cost = DEF[kind].cost;
+    if(game.money < cost){ toast("Zu wenig Geld für "+DEF[kind].name+" ("+cost+" 💵)",0xff5d6c); return false; }
+    game.money -= cost;
+  }
   const sz=DEF[kind].size||[1,1];
   const mesh = makeMesh(kind,placeDir);
   const cwx=(x+(sz[0]-1)/2 - HALF)*S, cwz=(z+(sz[1]-1)/2 - HALF)*S; mesh.position.set(cwx,0,cwz); scene.add(mesh);
-  const b = {kind,x,z,dir:placeDir,cells,mesh,t:0,buf:{},outBuf:0,outType:null,want:false,stored:0,powered:false,wired:false};
+  const b = {kind,x,z,dir:placeDir,cells,mesh,t:0,buf:{},outBuf:0,outType:null,want:false,stored:0,powered:false,wired:false,fixed:!!free};
   for(const [cx,cz] of cells) grid_.set(k(cx,cz),b);
   if(kind!=="belt" && kind!=="cable"){ const lab=document.createElement('div'); lab.className="blabel"; document.getElementById('labels').appendChild(lab); b.labelEl=lab; }
   buildings.push(b);
+  return true;
 }
 function removeAt(x,z){
   const b = grid_.get(k(x,z)); if(!b) return;
+  if(b.fixed){ toast("Natürliche Rohstoffquelle – kann nicht abgerissen werden.",0xffb454); return; }
   game.money += Math.round(DEF[b.kind].cost*0.5);
   scene.remove(b.mesh); if(b.labelEl) b.labelEl.remove();
   for(const [cx,cz] of (b.cells||[[b.x,b.z]])) grid_.delete(k(cx,cz));
@@ -743,23 +748,20 @@ function updateLabels(){
 /* ===================== TIPPS (Taste T) ===================== */
 function nextTip(){
   const cnt=kk=>buildings.filter(b=>b.kind===kk).length;
-  if(cnt("solar")===0) return "Baue zuerst ein ☀️ <b>Solarkraftwerk</b> — ohne Strom läuft keine Maschine.";
-  if(cnt("sandmine")===0) return "Baue eine ⛏️ <b>Sandgrube</b> — sie liefert den Quarzsand, mit dem alles beginnt.";
-  if(cnt("coalmine")===0) return "Baue eine ⚫ <b>Kohlemine</b> — der Lichtbogenofen braucht Sand UND Kohle.";
+  if(cnt("solar")===0) return "Baue zuerst ein ☀️ <b>Solarkraftwerk</b> und verlege 🔌 <b>Stromkabel</b> — ohne Strom läuft nichts.";
   if(!game.powerOK){ return game.sun<0.15
-    ? "🌙 Nachts liefert Solar keinen Strom! Baue 🔋 <b>Energiespeicher</b>, die tagsüber laden und nachts aushelfen."
-    : "⚡ Der Strom reicht nicht. Baue mehr ☀️ <b>Solarkraftwerke</b> (oder 🔋 Energiespeicher als Puffer)."; }
-  const chain=[["furnace","🔥 <b>Lichtbogenofen</b> (Sand + Kohle → Rohsilizium)"],["siemens","⚗️ <b>Siemens-Reaktor</b> (→ Reinst-Silizium)"],
-    ["crystal","💎 <b>Kristallzieher</b> (→ Barren)"],["waferplant","🥞 <b>Wafer-Werk</b> (→ Wafer)"],
-    ["fab","🔬 <b>Frontend-Fab</b> (→ Struktur-Wafer)"],["packaging","📦 <b>Packaging</b> (→ Chip)"]];
-  for(const [kk,desc] of chain){ if(cnt(kk)===0) return "Baue als Nächstes: "+desc+" und verbinde es per Förderband mit der Quelle."; }
-  if(cnt("pump")===0 && (cnt("waferplant")||cnt("fab"))) return "💧 Wafer-Werk und Fab brauchen Wasser — baue eine <b>Wasserpumpe</b>.";
+    ? "🌙 Nachts liefert Solar keinen Strom! Baue 🔋 <b>Energiespeicher</b> (per 🔌 Kabel verbunden), die tagsüber laden und nachts aushelfen."
+    : "⚡ Strom fehlt oder ist nicht verbunden. Baue mehr ☀️ <b>Solar</b> und verlege 🔌 <b>Kabel</b> zu jedem Verbraucher (auch zu den Minen!)."; }
+  const chain=[["furnace","🔥 <b>Lichtbogenofen</b> — verbinde ihn per ➤ Förderband mit einer ⛏️ <b>Sandgrube</b> UND ⚫ <b>Kohlemine</b> (liegen schon auf der Karte) und per 🔌 Kabel mit Strom"],
+    ["siemens","⚗️ <b>Siemens-Reaktor</b> (→ Reinst-Silizium)"],["crystal","💎 <b>Kristallzieher</b> (→ Barren)"],
+    ["waferplant","🥞 <b>Wafer-Werk</b> (→ Wafer)"],["fab","🔬 <b>Frontend-Fab</b> (→ Struktur-Wafer)"],["packaging","📦 <b>Packaging</b> (→ Chip)"]];
+  for(const [kk,desc] of chain){ if(cnt(kk)===0) return "Baue als Nächstes: "+desc+"."; }
   if(!game.waterOK){ return game.sun<0.15
-    ? "🛢️ Wasser knapp: Nachts fällt die Pumpe ohne Strom aus. Baue einen <b>Wassertank</b> als Puffer (und 🔋 Energiespeicher für die Pumpe)."
-    : "💧 Wasser reicht nicht — baue mehr <b>Wasserpumpen</b> oder einen 🛢️ Wassertank."; }
+    ? "🛢️ Wasser knapp: Nachts fallen die 💧 Pumpen ohne Strom aus. Verbinde sie per 🔌 Kabel und baue 🔋 Speicher / einen 🛢️ Wassertank als Puffer."
+    : "💧 Wasser reicht nicht — verbinde die 💧 <b>Wasserpumpen</b> (liegen auf der Karte) per 🔌 Kabel oder baue einen 🛢️ Wassertank."; }
   if(cnt("seller")===0) return "🚚 Baue einen <b>Versand</b> und leite die Chips dorthin — so verdienst du Geld.";
   const waiting=buildings.find(b=>RECIPES[b.kind] && statusOf(b)[0]==="wartet auf Material");
-  if(waiting) return "➤ Der/die <b>"+DEF[waiting.kind].name+"</b> wartet auf Nachschub — verbinde die Maschinen lückenlos mit Förderbändern.";
+  if(waiting) return "➤ Der/die <b>"+DEF[waiting.kind].name+"</b> wartet auf Nachschub — verbinde die Maschinen lückenlos mit Förderbändern bis zu den Rohstoffquellen.";
   if(game.powerCap===0) return "🔋 Tipp: Ein <b>Energiespeicher</b> hält deine Fabrik nachts am Laufen, wenn Solar pausiert.";
   if(game.money<150) return "💵 Dein Geld wird knapp — sorge dafür, dass mehr Chips beim Versand ankommen.";
   return "✅ Sieht gut aus! Erweitere die Produktion und puffere mit 🔋 Energiespeicher / 🛢️ Wassertank gegen die Nacht.";
@@ -799,6 +801,7 @@ loop();
 
 /* ===================== INIT ===================== */
 document.getElementById('chaintext').innerHTML =
+ `<span style="color:var(--acc)">Rohstoffquellen (⛏️ Sand · ⚫ Kohle · 💧 Wasser) sind bereits auf der Karte verteilt — verbinde sie mit 🔌 Kabeln &amp; ➤ Förderbändern.</span>\n\n`+
  `⛏️ Quarzsand &nbsp;+&nbsp; ⚫ Kohle\n`+
  `&nbsp;&nbsp;↳ 🔥 <b>Lichtbogenofen</b> (Strom) → Rohsilizium\n`+
  `&nbsp;&nbsp;↳ ⚗️ <b>Siemens-Reaktor</b> (HCl, H₂) → Reinst-Silizium\n`+
@@ -807,11 +810,35 @@ document.getElementById('chaintext').innerHTML =
  `&nbsp;&nbsp;↳ 🔬 <b>Frontend-Fab</b> (O₂, Photoresist, Dotierstoffe, Gase, Kupfer, Wasser) → Struktur-Wafer\n`+
  `&nbsp;&nbsp;↳ 📦 <b>Packaging</b> (Epoxidharz) → Chip\n`+
  `&nbsp;&nbsp;↳ 🚚 <b>Versand</b> → 💰 +${CHIP_PRICE}`;
-buildHotbar(); buildSupplies(); selectTool("belt");
+/* ===================== ROHSTOFFE ZUFÄLLIG VERTEILEN ===================== */
+function addPatch(kind,x,z){ // Boden-Markierung für das Vorkommen
+  const col = kind==="sandmine"?0xc4a661 : kind==="coalmine"?0x1c1c1c : 0x2f7fb0;
+  const m=new THREE.Mesh(new THREE.CircleGeometry(.66,22), new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.4}));
+  m.rotation.x=-Math.PI/2; const [wx,wz]=tileToWorld(x,z); m.position.set(wx,.02,wz); scene.add(m);
+}
+function scatterResources(){
+  const want=[["sandmine",4],["coalmine",3],["pump",3]];
+  const placed=[]; const minDist=3;
+  for(const [kind,num] of want){
+    let made=0, tries=0;
+    while(made<num && tries<500){ tries++;
+      const x=2+Math.floor(Math.random()*(N-4)), z=2+Math.floor(Math.random()*(N-4));
+      if(grid_.get(k(x,z))) continue;
+      if(placed.some(p=>Math.abs(p[0]-x)+Math.abs(p[1]-z)<minDist)) continue;
+      let dir = x<N/2 ? 1 : 3; // Ausgaberichtung Richtung Kartenmitte
+      if(SOURCES[kind]){ const fx=x+DIRS[dir][0], fz=z+DIRS[dir][1]; if(!inBounds(fx,fz)||grid_.get(k(fx,fz))) continue; }
+      placeDir=dir;
+      if(place(kind,x,z,true)){ addPatch(kind,x,z); placed.push([x,z]); made++; }
+    }
+  }
+  placeDir=1; // zurücksetzen
+}
+
+buildHotbar(); buildSupplies(); selectTool("belt"); scatterResources();
 document.querySelectorAll('#speedctl .spd').forEach(el=>{ el.onclick=()=>{ game.speed=+el.dataset.s;
   document.querySelectorAll('#speedctl .spd').forEach(e=>e.classList.toggle('sel', e===el)); }; });
 document.getElementById('back').onclick=()=>location.href='index.html';
-document.getElementById('startbtn').onclick=()=>{ document.getElementById('intro').classList.add('hide'); started=true; toast("Tipp: Beginne mit ☀️ Solarkraftwerk und ⛏️ Sandgrube!",0x34e0c0); };
+document.getElementById('startbtn').onclick=()=>{ document.getElementById('intro').classList.add('hide'); started=true; toast("Sand, Kohle & Wasser liegen schon auf der Karte ✦ baue ☀️ Solar, verlege 🔌 Kabel & ➤ Bänder. Taste T = Tipp.",0x34e0c0); };
 </script>
 </body>
 </html>
