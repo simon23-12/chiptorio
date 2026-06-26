@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>FAB — Vom Sand zum Silizium</title>
+<title>Chiptorio</title>
+<link rel="icon" type="image/png" href="LMGTECHlogo.png">
 <style>
   :root{
     --bg:#05080f; --panel:rgba(12,18,30,.82); --line:#1d2c44;
@@ -108,9 +109,33 @@
     z-index:30;box-shadow:0 10px 30px #0008;animation:pop .3s}
   @keyframes pop{from{opacity:0;transform:translateX(-50%) translateY(-8px)}}
   kbd{font-family:var(--mono);background:#16223a;border:1px solid #2a3a5a;border-radius:4px;padding:1px 5px;font-size:11px}
+
+  /* Musik-Toggle + Optionen */
+  #music-toggle{position:fixed;top:18px;right:18px;z-index:40;pointer-events:auto;cursor:pointer;
+    border:1px solid #33486e;background:#0c1830cc;color:var(--txt);font-size:18px;width:42px;height:42px;
+    border-radius:11px;display:flex;align-items:center;justify-content:center;transition:.15s;backdrop-filter:blur(8px)}
+  #music-toggle:hover{border-color:var(--acc)} #music-toggle.off{color:var(--dim)}
+  .menu-actions{display:flex;gap:10px;margin-top:18px}
+  .pill{pointer-events:auto;cursor:pointer;font-family:var(--sans);font-weight:600;font-size:13px;
+    border:1px solid #33486e;background:transparent;color:var(--dim);padding:9px 18px;border-radius:10px;transition:.15s}
+  .pill:hover{background:#16223a;color:var(--txt);border-color:var(--acc)}
+  #options .opt-card{background:#0c1830;border:1px solid var(--line);border-radius:14px;padding:18px 22px;
+    max-width:560px;text-align:left;margin:14px 0}
+  #options h2{margin:0 0 4px;font-size:15px;color:var(--acc2)}
+  #options .row{display:flex;justify-content:space-between;gap:18px;padding:4px 0;font-size:13px;border-bottom:1px solid #14213a}
+  #options .row:last-child{border-bottom:0}
+  #options .row .d{color:var(--dim)}
+
+  /* Hintergrund-Halbleiter im Menü */
+  .bgchips{position:absolute;inset:0;z-index:0;overflow:hidden;pointer-events:none}
+  #menu>.logo-badge,#menu>.brand-title,#menu>.brand-sub,#menu>.menu-cards,#menu>.menu-actions,#menu>.menu-foot{position:relative;z-index:1}
+  .chip{position:absolute;opacity:.16;animation:drift linear infinite;will-change:transform}
+  @keyframes drift{ from{transform:translate(-14vw, 0) rotate(0deg)} to{transform:translate(116vw, -6vh) rotate(45deg)} }
 </style>
 </head>
 <body>
+<audio id="music-menu" src="mainmenu.mp3" loop preload="auto"></audio>
+<audio id="music-tut" src="tutorial.mp3" loop preload="auto"></audio>
 <div id="ui" class="hide">
   <div id="top">
     <button id="to-menu" class="ghost">☰ Menü</button>
@@ -143,6 +168,8 @@
 
 <!-- HAUPTMENÜ -->
 <div id="menu" class="screen">
+  <div class="bgchips" id="bgchips"></div>
+  <button id="music-toggle" title="Musik an/aus">🔊</button>
   <div class="logo-badge"><img src="LMGTECHlogo.png" alt="LMG TECH"></div>
   <h1 class="brand-title">Chiptorio: Halbleiter</h1>
   <p class="brand-sub">Vom Sandkorn zum fertigen Computerchip — lerne, wie Halbleiter entstehen, und baue deine eigene Chipfabrik.</p>
@@ -161,7 +188,32 @@
       <div class="go">▸ Fabrik starten</div>
     </div>
   </div>
+  <div class="menu-actions">
+    <button class="pill" id="btn-options">⚙ Optionen</button>
+  </div>
   <div class="menu-foot">◆ LMG TECH</div>
+</div>
+
+<!-- OPTIONEN -->
+<div id="options" class="screen hide">
+  <button class="back-btn ghost" id="options-back">← Hauptmenü</button>
+  <h1 class="brand-title" style="font-size:34px">⚙ Optionen</h1>
+  <div class="opt-card">
+    <h2>🏭 Fabrik bauen — Tastenkürzel</h2>
+    <div class="row"><span>Werkzeug wählen</span><span class="d"><kbd>1</kbd>–<kbd>0</kbd>, <kbd>B</kbd>, <kbd>W</kbd>, <kbd>P</kbd>, <kbd>V</kbd>, <kbd>X</kbd></span></div>
+    <div class="row"><span>Bauen / Förderband ziehen</span><span class="d"><kbd>Linksklick</kbd> · Ziehen</span></div>
+    <div class="row"><span>Ausrichtung drehen</span><span class="d"><kbd>R</kbd></span></div>
+    <div class="row"><span>Gebäude abreißen</span><span class="d"><kbd>Rechtsklick</kbd> / <kbd>X</kbd></span></div>
+    <div class="row"><span>Gebäude-Infos ein/aus</span><span class="d"><kbd>I</kbd></span></div>
+    <div class="row"><span><b>Tipp: Was als Nächstes bauen?</b></span><span class="d"><kbd>T</kbd></span></div>
+    <div class="row"><span>Kamera drehen / zoomen</span><span class="d">Ziehen · <kbd>Mausrad</kbd></span></div>
+  </div>
+  <div class="opt-card">
+    <h2>🔬 Wie entstehen Halbleiter?</h2>
+    <div class="row"><span>Ansicht drehen / zoomen</span><span class="d">Ziehen · <kbd>Mausrad</kbd></span></div>
+    <div class="row"><span>Schritt bedienen</span><span class="d">Regler &amp; Buttons</span></div>
+  </div>
+  <p class="brand-sub" style="font-size:12px">Musik lässt sich im Hauptmenü oben rechts ein- und ausschalten 🔊</p>
 </div>
 
 <!-- INTRO: Lernmodus -->
@@ -968,14 +1020,50 @@ function showOutro(){
   el('to-menu2').onclick=()=>{ clearStage(); show('menu'); };
 }
 
+/* ============================ MUSIK ============================ */
+let musicOn = localStorage.getItem('chiptorio-music')!=='off';
+let currentScreen='menu';
+const aMenu=el('music-menu'), aTut=el('music-tut');
+aMenu.volume=0.45; aTut.volume=0.5;
+function trackForScreen(id){ return (id==='overlay'||id===null||id==='outro') ? 'tut' : 'menu'; }
+function applyMusic(track){
+  if(!musicOn){ aMenu.pause(); aTut.pause(); return; }
+  if(track==='tut'){ aMenu.pause(); aTut.play().catch(()=>{}); }
+  else { aTut.pause(); aMenu.play().catch(()=>{}); }
+}
+function updateMusicBtn(){ const b=el('music-toggle'); b.textContent=musicOn?'🔊':'🔇'; b.classList.toggle('off',!musicOn); }
+el('music-toggle').onclick=()=>{ musicOn=!musicOn; localStorage.setItem('chiptorio-music',musicOn?'on':'off');
+  updateMusicBtn(); applyMusic(trackForScreen(currentScreen)); };
+updateMusicBtn();
+
+/* ============================ HINTERGRUND-CHIPS ============================ */
+const CHIP_SVG=`<svg viewBox="0 0 40 40" width="100%" height="100%" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="11" y="11" width="18" height="18" rx="3" fill="#3f8ae8"/>
+  <rect x="15.5" y="15.5" width="9" height="9" rx="2" fill="#f5931a"/>
+  <g stroke="#5aa9ff" stroke-width="2" stroke-linecap="round">
+   <line x1="15" y1="11" x2="15" y2="5"/><line x1="20" y1="11" x2="20" y2="5"/><line x1="25" y1="11" x2="25" y2="5"/>
+   <line x1="15" y1="29" x2="15" y2="35"/><line x1="20" y1="29" x2="20" y2="35"/><line x1="25" y1="29" x2="25" y2="35"/>
+   <line x1="11" y1="15" x2="5" y2="15"/><line x1="11" y1="20" x2="5" y2="20"/><line x1="11" y1="25" x2="5" y2="25"/>
+   <line x1="29" y1="15" x2="35" y2="15"/><line x1="29" y1="20" x2="35" y2="20"/><line x1="29" y1="25" x2="35" y2="25"/>
+  </g></svg>`;
+function buildBgChips(){ const c=el('bgchips'); if(!c) return;
+  for(let i=0;i<14;i++){ const d=document.createElement('div'); d.className='chip';
+    const sz=18+Math.random()*36; d.style.width=sz+'px'; d.style.height=sz+'px'; d.style.top=(Math.random()*100)+'%';
+    const dur=26+Math.random()*32; d.style.animationDuration=dur+'s'; d.style.animationDelay=(-Math.random()*dur)+'s';
+    d.style.opacity=(0.07+Math.random()*0.13).toFixed(2); d.innerHTML=CHIP_SVG; c.appendChild(d); }
+}
+buildBgChips();
+
 /* ============================ SCREENS / BOOT ============================ */
-const SCREENS=['menu','overlay','coming','outro'];
+const SCREENS=['menu','overlay','coming','outro','options'];
 function show(id){ SCREENS.forEach(s=>el(s).classList.add('hide')); if(id) el(id).classList.remove('hide');
-  el('ui').classList.toggle('hide', !!id); } // HUD nur im Spiel sichtbar (id===null)
+  el('ui').classList.toggle('hide', !!id); currentScreen=id; applyMusic(trackForScreen(id)); }
 function resetGame(){ state.purity=5; state.yield=100; state.stage=0; loadedIndex=0; refreshMeters(); }
 
 el('btn-learn').onclick    = ()=> show('overlay');
 el('btn-factory').onclick  = ()=> location.href='factory.html';
+el('btn-options').onclick  = ()=> show('options');
+el('options-back').onclick = ()=> show('menu');
 el('coming-back').onclick  = ()=> show('menu');
 el('coming-back2').onclick = ()=> show('menu');
 el('intro-back').onclick   = ()=> show('menu');

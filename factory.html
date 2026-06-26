@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Chiptorio — Fabrik bauen</title>
+<title>Chiptorio</title>
+<link rel="icon" type="image/png" href="LMGTECHlogo.png">
 <style>
   :root{
     --bg:#0e1626; --panel:rgba(12,18,30,.9); --line:#1d2c44;
@@ -78,6 +79,10 @@
   #tip{position:fixed;z-index:20;pointer-events:none;background:#06101fee;border:1px solid var(--line);
     border-radius:8px;padding:6px 9px;font-size:11px;font-family:var(--mono);display:none;max-width:220px}
   #tip .s{color:var(--dim)}
+  #tipbox{position:fixed;left:50%;bottom:120px;transform:translateX(-50%);z-index:25;max-width:560px;
+    background:var(--panel);border:1px solid var(--acc);border-radius:12px;padding:12px 18px;font-size:13.5px;
+    line-height:1.45;box-shadow:0 12px 36px #0009;backdrop-filter:blur(10px);text-align:center}
+  #tipbox b{color:var(--acc)}
   #labels{position:fixed;inset:0;z-index:9;pointer-events:none}
   .blabel{position:absolute;transform:translate(-50%,-115%);background:#06101fe6;border:1px solid var(--line);
     border-radius:7px;padding:3px 7px;font-size:10px;font-family:var(--mono);line-height:1.4;white-space:nowrap;display:none}
@@ -95,6 +100,7 @@
     <div class="stat"><span class="lbl">💧 WASSER</span><b id="s-water">—</b></div>
     <div class="stat"><span class="lbl">🔲 CHIPS</span><b id="s-chips" style="color:var(--acc)">0</b></div>
     <div class="stat"><span class="lbl">💵 /min</span><b id="s-rate">0</b></div>
+    <div class="stat"><span class="lbl">🕒 ZEIT</span><b id="s-time">—</b></div>
   </div>
   <div id="hotbar"></div>
 </div>
@@ -109,13 +115,14 @@
 
 <div id="labels"></div>
 <div id="tip"></div>
+<div id="tipbox" class="hide"></div>
 <div id="toast"></div>
 
 <div id="intro">
   <h1>🏭 Fabrik bauen</h1>
   <p style="color:var(--dim);max-width:560px;margin:0">Baue die Lieferkette vom Quarzsand bis zum Chip. Verbinde die Maschinen mit Förderbändern und halte Strom, Wasser, Rohstoffe und Geld im Gleichgewicht.</p>
   <div class="chain" id="chaintext"></div>
-  <p class="ctrl"><b>Steuerung:</b> &nbsp;<kbd>Linksklick</kbd> bauen · <kbd>Ziehen</kbd> Kamera drehen · Förderband/Abriss <kbd>ziehen</kbd> zum Verlegen · <kbd>R</kbd> drehen · <kbd>Rechtsklick</kbd> abreißen · <kbd>1</kbd>–<kbd>0</kbd> Werkzeug · <kbd>i</kbd> Gebäude-Infos · <kbd>Mausrad</kbd> zoomen</p>
+  <p class="ctrl"><b>Steuerung:</b> &nbsp;<kbd>Linksklick</kbd> bauen · <kbd>Ziehen</kbd> Kamera drehen · Förderband/Abriss <kbd>ziehen</kbd> zum Verlegen · <kbd>R</kbd> drehen · <kbd>Rechtsklick</kbd> abreißen · <kbd>1</kbd>–<kbd>0</kbd>/<kbd>B</kbd>/<kbd>W</kbd> Werkzeug · <kbd>i</kbd> Infos · <kbd>T</kbd> Tipp · <kbd>Mausrad</kbd> zoomen</p>
   <button class="big" id="startbtn">▶ Fabrik starten</button>
 </div>
 
@@ -170,6 +177,8 @@ const DEF = {
   coalmine:  {name:"Kohlemine", ic:"⚫", cost:90,  col:0x3a3a3a, powerUse:3,  cat:"Rohstoff"},
   solar:     {name:"Solarkraftwerk", ic:"☀️", cost:140, col:0x2e6da4, powerGen:25, cat:"Versorgung"},
   pump:      {name:"Wasserpumpe", ic:"💧", cost:120, col:0x2a8fb0, powerUse:6, waterGen:25, cat:"Versorgung"},
+  battery:   {name:"Energiespeicher", ic:"🔋", cost:200, col:0x2e8a5a, powerCap:300, cat:"Versorgung"},
+  wtank:     {name:"Wassertank", ic:"🛢️", cost:160, col:0x2a6a8a, waterCap:260, cat:"Versorgung"},
   furnace:   {name:"Lichtbogenofen", ic:"🔥", cost:220, col:0xc0532a, powerUse:26, cat:"Maschine"},
   siemens:   {name:"Siemens-Reaktor", ic:"⚗️", cost:260, col:0x4a7a55, powerUse:14, cat:"Maschine"},
   crystal:   {name:"Kristallzieher", ic:"💎", cost:320, col:0x7a5aa0, powerUse:18, cat:"Maschine"},
@@ -195,10 +204,12 @@ const RECIPES = {
   packaging: {in:{pwafer:1}, sup:{epoxy:1}, out:"chip", time:2.6},
 };
 const CHIP_PRICE = 150;
-const TOOLS = ["belt","sandmine","coalmine","solar","pump","furnace","siemens","crystal","waferplant","fab","packaging","seller","delete"];
-const KEYMAP = {"1":"belt","2":"sandmine","3":"coalmine","4":"solar","5":"pump","6":"furnace","7":"siemens","8":"crystal","9":"waferplant","0":"fab","p":"packaging","v":"seller","x":"delete"};
+const TOOLS = ["belt","sandmine","coalmine","solar","pump","battery","wtank","furnace","siemens","crystal","waferplant","fab","packaging","seller","delete"];
+const KEYMAP = {"1":"belt","2":"sandmine","3":"coalmine","4":"solar","5":"pump","b":"battery","w":"wtank","6":"furnace","7":"siemens","8":"crystal","9":"waferplant","0":"fab","p":"packaging","v":"seller","x":"delete"};
 
-const game = { money:3000, chips:0, powerGen:0, powerDemand:0, waterGen:0, waterDemand:0, powerOK:true, waterOK:true, rate:0, soldWindow:[] };
+const DAYLEN = 100; // Sekunden pro Tag/Nacht-Zyklus
+const game = { money:3000, chips:0, powerGen:0, powerDemand:0, waterGen:0, waterDemand:0, powerOK:true, waterOK:true, rate:0, soldWindow:[],
+  storedPower:0, storedWater:0, powerCap:0, waterCap:0, timeOfDay:0.18, sun:1 };
 
 /* ===================== THREE SETUP ===================== */
 const renderer = new THREE.WebGLRenderer({antialias:true});
@@ -215,10 +226,16 @@ controls.enableDamping = true; controls.dampingFactor = .09;
 controls.minDistance = 6; controls.maxDistance = 38; controls.maxPolarAngle = Math.PI*0.46;
 controls.target.set(0,0,0);
 
-scene.add(new THREE.AmbientLight(0xb4c6e4, .7));
-scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x1a2438, 1.0));
+const ambient = new THREE.AmbientLight(0xb4c6e4, .7); scene.add(ambient);
+const hemi = new THREE.HemisphereLight(0xcfe0ff, 0x1a2438, 1.0); scene.add(hemi);
 const key = new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(10,16,8); scene.add(key);
 const fill = new THREE.DirectionalLight(0xcfe0ff, .7); fill.position.set(-8,8,-6); scene.add(fill);
+const _dayBg=new THREE.Color(0x14233e), _nightBg=new THREE.Color(0x070b16), _warm=new THREE.Color(0xffd9a0), _whiteC=new THREE.Color(0xffffff);
+function applyDayNight(){ const s=game.sun;
+  ambient.intensity=.13+.62*s; hemi.intensity=.18+.95*s; key.intensity=.12+1.6*s; fill.intensity=.2+.6*s;
+  key.color.copy(_warm).lerp(_whiteC, Math.min(1,s*1.4));
+  scene.background.copy(_nightBg).lerp(_dayBg, s); scene.fog.color.copy(scene.background);
+}
 
 // Boden + Gitter
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(N*S, N*S),
@@ -268,6 +285,14 @@ function makeMesh(kind,dir){
     case "pump": // Tank + Rohr
       add(C(.3,.3,.5,0x2a8fb0,{metalness:.5}),0,.3,0);
       add(C(.32,.32,.06,0x1d6f8a),0,.57,0); add(B(.1,.46,.1,0x1d6f8a),.34,.27,0); indY=.84; break;
+    case "battery": // Energiespeicher (Akku mit Pluspol + gelbem Streifen)
+      add(B(.62,.46,.7,0x2e8a5a,{metalness:.3}),0,.25,0);
+      add(B(.16,.07,.16,0x9fe0b0),0,.51,0);
+      add(B(.46,.12,.03,0xffd24a,{emissive:0x4a3a00,emissiveIntensity:.6}),0,.32,.36); indY=.78; break;
+    case "wtank": // Wassertank (Zylinder mit blauem Wasserspiegel)
+      add(C(.34,.34,.62,0x2a6a8a,{metalness:.4}),0,.33,0);
+      add(C(.36,.36,.06,0x1d5570),0,.63,0);
+      add(C(.3,.3,.04,0x4fc8ee,{emissive:0x114455,emissiveIntensity:.5,transparent:true,opacity:.85}),0,.5,0); indY=.86; break;
     case "furnace": // Tiegel mit glühender Schmelze + Elektroden
       add(C(.36,.3,.46,0x6b3a24,{roughness:.85}),0,.25,0);
       add(C(.31,.31,.07,0xff5a00,{emissive:0xff4400,emissiveIntensity:1.3}),0,.5,0);
@@ -359,9 +384,12 @@ function moveItems(dt){
 function hasInputs(b){ const r=RECIPES[b.kind]; for(const key in r.in){ if((b.buf[key]||0) < r.in[key]) return false; } return true; }
 function hasSupplies(b){ const r=RECIPES[b.kind]; for(const key in r.sup){ if(SUP[key].stock < r.sup[key]) return false; } return true; }
 
-function computeUtilities(){
-  let pGen=0, pDem=0;
-  for(const b of buildings){ const d=DEF[b.kind]; if(d.powerGen) pGen+=d.powerGen; }
+function computeUtilities(dt){
+  let pGen=0, pDem=0, pCap=0, wCap=0;
+  for(const b of buildings){ const d=DEF[b.kind];
+    if(d.powerGen) pGen += d.powerGen * (b.kind==="solar"?game.sun:1); // Solar: nachts 0
+    if(d.powerCap) pCap+=d.powerCap; if(d.waterCap) wCap+=d.waterCap;
+  }
   for(const b of buildings){ if(RECIPES[b.kind]) b.want = b.outBuf===0 && hasInputs(b) && hasSupplies(b); }
   for(const b of buildings){
     const d=DEF[b.kind]; if(!d.powerUse) continue;
@@ -370,11 +398,20 @@ function computeUtilities(){
     else if(RECIPES[b.kind]){ if(b.want) pDem+=d.powerUse; }
     else pDem+=d.powerUse;
   }
-  game.powerGen=pGen; game.powerDemand=pDem; game.powerOK = pGen>=pDem;
+  game.powerGen=pGen; game.powerDemand=pDem; game.powerCap=pCap; game.waterCap=wCap;
+  game.storedPower=Math.min(game.storedPower,pCap); game.storedWater=Math.min(game.storedWater,wCap);
+  // Strom-Bilanz mit Energiespeicher
+  const pNet = pGen - pDem;
+  if(pNet>=0){ game.powerOK=true; game.storedPower=Math.min(pCap, game.storedPower + pNet*dt*0.9); }
+  else { if(game.storedPower>0){ game.powerOK=true; game.storedPower=Math.max(0, game.storedPower + pNet*dt); } else game.powerOK=false; }
+  // Wasser-Bilanz mit Wassertank (Pumpen brauchen Strom)
   let wGen=0, wDem=0;
   for(const b of buildings){ const d=DEF[b.kind]; if(d.waterGen && game.powerOK) wGen+=d.waterGen; }
   for(const b of buildings){ const d=DEF[b.kind]; if(RECIPES[b.kind] && d.waterUse && b.want && game.powerOK) wDem+=d.waterUse; }
-  game.waterGen=wGen; game.waterDemand=wDem; game.waterOK = wGen>=wDem;
+  game.waterGen=wGen; game.waterDemand=wDem;
+  const wNet = wGen - wDem;
+  if(wNet>=0){ game.waterOK=true; game.storedWater=Math.min(wCap, game.storedWater + wNet*dt); }
+  else { if(game.storedWater>0){ game.waterOK=true; game.storedWater=Math.max(0, game.storedWater + wNet*dt); } else game.waterOK=false; }
 }
 
 function tickWork(dt){
@@ -417,8 +454,10 @@ function statusOf(b){
     return ["läuft",0x44ff88];
   }
   if(b.kind==="seller") return ["bereit",0x44ff88];
-  if(b.kind==="solar") return ["⚡ "+DEF.solar.powerGen,0x44ff88];
+  if(b.kind==="solar") return game.sun>0.06?["☀️ "+Math.round(DEF.solar.powerGen*game.sun),0x44ff88]:["🌙 nachts inaktiv",0x5aa9ff];
   if(b.kind==="pump") return (game.powerOK?["💧 "+DEF.pump.waterGen,0x44ff88]:["kein Strom",0xff5d6c]);
+  if(b.kind==="battery"){ const p=game.powerCap?Math.round(game.storedPower/game.powerCap*100):0; return ["🔋 "+p+"%", p>15?0x44ff88:0xffd24a]; }
+  if(b.kind==="wtank"){ const p=game.waterCap?Math.round(game.storedWater/game.waterCap*100):0; return ["🛢️ "+p+"%", p>15?0x44ff88:0xffd24a]; }
   return ["",0x44ff88];
 }
 function updateIndicators(){
@@ -486,6 +525,7 @@ addEventListener('keydown',e=>{
   const key=e.key.toLowerCase();
   if(key==="r"){ placeDir=(placeDir+1)%4; updateGhost(); }
   else if(key==="i"){ labelsOn=!labelsOn; updateLabels(); toast(labelsOn?"Gebäude-Infos: AN (i)":"Gebäude-Infos: AUS (i)",0x34e0c0); }
+  else if(key==="t"){ showTip(); }
   else if(KEYMAP[key]){ selectTool(KEYMAP[key]); }
   else if(key==="escape"){ document.getElementById('intro').classList.add('hide'); }
 });
@@ -523,7 +563,9 @@ function updateTip(e){
 /* ===================== HOTBAR / UI ===================== */
 const recipeText = {
   sandmine:"erzeugt Quarzsand", coalmine:"erzeugt Kohle",
-  solar:"+25 Strom (ohne Brennstoff)", pump:"+25 Wasser · braucht Strom",
+  solar:"+25 Strom tagsüber — nachts liefert es nichts!", pump:"+25 Wasser · braucht Strom",
+  battery:"speichert überschüssigen Strom und überbrückt damit die Nacht (Solar liefert nachts nichts)",
+  wtank:"speichert überschüssiges Wasser als Puffer für Engpässe",
   furnace:"Sand + Kohle + Strom → Rohsilizium", siemens:"Rohsilizium + HCl + H₂ + Strom → Reinst-Si",
   crystal:"Reinst-Si + Argon + Strom → Barren", waferplant:"Barren + Wasser + Strom → 2× Wafer",
   fab:"Wafer + O₂ + Photoresist + F-Gase + N₂ + Bor/Phosphor/Arsen + Kupfer + Wasser + Strom → Struktur-Wafer",
@@ -575,12 +617,15 @@ function toast(msg,col=0xffb454){
 function updateHUD(){
   document.getElementById('s-money').textContent = Math.floor(game.money)+" 💵";
   document.getElementById('s-money').style.color = game.money<200?"var(--bad)":"var(--good)";
-  const ps=document.getElementById('s-power'); ps.textContent=`${game.powerDemand}/${game.powerGen}`; ps.style.color=game.powerOK?"var(--good)":"var(--bad)";
-  const ws=document.getElementById('s-water'); ws.textContent=`${game.waterDemand}/${game.waterGen}`; ws.style.color=game.waterOK?"var(--good)":"var(--bad)";
+  const ps=document.getElementById('s-power'); ps.innerHTML=`${Math.round(game.powerDemand)}/${Math.round(game.powerGen)}`+(game.powerCap>0?` <span style="color:#46d97e">🔋${Math.round(game.storedPower/game.powerCap*100)}%</span>`:""); ps.style.color=game.powerOK?"var(--good)":"var(--bad)";
+  const ws=document.getElementById('s-water'); ws.innerHTML=`${Math.round(game.waterDemand)}/${Math.round(game.waterGen)}`+(game.waterCap>0?` <span style="color:#5aa9ff">🛢️${Math.round(game.storedWater/game.waterCap*100)}%</span>`:""); ws.style.color=game.waterOK?"var(--good)":"var(--bad)";
   document.getElementById('s-chips').textContent=game.chips;
   // Verkaufsrate /min
   const now=performance.now(); game.soldWindow=game.soldWindow.filter(t=>now-t<60000);
   document.getElementById('s-rate').textContent=(game.soldWindow.length*CHIP_PRICE);
+  // Tageszeit
+  const h=Math.floor(game.timeOfDay*24), m=Math.floor((game.timeOfDay*24%1)*60);
+  const ts=document.getElementById('s-time'); ts.textContent=(game.sun>0.06?"☀️":"🌙")+" "+String(h).padStart(2,"0")+":"+String(m).padStart(2,"0"); ts.style.color=game.sun>0.06?"var(--warn)":"var(--acc2)";
 }
 
 /* ===================== INFO-SCHILDER (Taste i) ===================== */
@@ -595,6 +640,8 @@ function labelHTML(b){
     if(u.length) out+=`<br><span class="u">${u.join(" · ")}</span>`;
   }
   else if(b.kind==="seller") out+=`<br><span class="p">Chip → +${CHIP_PRICE} 💵</span>`;
+  else if(b.kind==="battery"){ const p=game.powerCap?Math.round(game.storedPower/game.powerCap*100):0; out+=`<br><span class="p">🔋 geladen ${p}%</span><br><span class="u">Kapazität ${d.powerCap} ⚡</span>`; }
+  else if(b.kind==="wtank"){ const p=game.waterCap?Math.round(game.storedWater/game.waterCap*100):0; out+=`<br><span class="p">🛢️ gefüllt ${p}%</span><br><span class="u">Kapazität ${d.waterCap} 💧</span>`; }
   const st=statusOf(b)[0];
   if(st==="kein Strom"){ const def=Math.max(0,game.powerDemand-game.powerGen); out+=`<br><span class="w">⚠ Strom fehlt${def?` −${def} ⚡`:""}</span>`; }
   else if(st==="kein Wasser"){ const def=Math.max(0,game.waterDemand-game.waterGen); out+=`<br><span class="w">⚠ Wasser fehlt −${def} 💧</span>`; }
@@ -616,6 +663,33 @@ function updateLabels(){
   }
 }
 
+/* ===================== TIPPS (Taste T) ===================== */
+function nextTip(){
+  const cnt=kk=>buildings.filter(b=>b.kind===kk).length;
+  if(cnt("solar")===0) return "Baue zuerst ein ☀️ <b>Solarkraftwerk</b> — ohne Strom läuft keine Maschine.";
+  if(cnt("sandmine")===0) return "Baue eine ⛏️ <b>Sandgrube</b> — sie liefert den Quarzsand, mit dem alles beginnt.";
+  if(cnt("coalmine")===0) return "Baue eine ⚫ <b>Kohlemine</b> — der Lichtbogenofen braucht Sand UND Kohle.";
+  if(!game.powerOK){ return game.sun<0.15
+    ? "🌙 Nachts liefert Solar keinen Strom! Baue 🔋 <b>Energiespeicher</b>, die tagsüber laden und nachts aushelfen."
+    : "⚡ Der Strom reicht nicht. Baue mehr ☀️ <b>Solarkraftwerke</b> (oder 🔋 Energiespeicher als Puffer)."; }
+  const chain=[["furnace","🔥 <b>Lichtbogenofen</b> (Sand + Kohle → Rohsilizium)"],["siemens","⚗️ <b>Siemens-Reaktor</b> (→ Reinst-Silizium)"],
+    ["crystal","💎 <b>Kristallzieher</b> (→ Barren)"],["waferplant","🥞 <b>Wafer-Werk</b> (→ Wafer)"],
+    ["fab","🔬 <b>Frontend-Fab</b> (→ Struktur-Wafer)"],["packaging","📦 <b>Packaging</b> (→ Chip)"]];
+  for(const [kk,desc] of chain){ if(cnt(kk)===0) return "Baue als Nächstes: "+desc+" und verbinde es per Förderband mit der Quelle."; }
+  if(cnt("pump")===0 && (cnt("waferplant")||cnt("fab"))) return "💧 Wafer-Werk und Fab brauchen Wasser — baue eine <b>Wasserpumpe</b>.";
+  if(!game.waterOK){ return game.sun<0.15
+    ? "🛢️ Wasser knapp: Nachts fällt die Pumpe ohne Strom aus. Baue einen <b>Wassertank</b> als Puffer (und 🔋 Energiespeicher für die Pumpe)."
+    : "💧 Wasser reicht nicht — baue mehr <b>Wasserpumpen</b> oder einen 🛢️ Wassertank."; }
+  if(cnt("seller")===0) return "🚚 Baue einen <b>Versand</b> und leite die Chips dorthin — so verdienst du Geld.";
+  const waiting=buildings.find(b=>RECIPES[b.kind] && statusOf(b)[0]==="wartet auf Material");
+  if(waiting) return "➤ Der/die <b>"+DEF[waiting.kind].name+"</b> wartet auf Nachschub — verbinde die Maschinen lückenlos mit Förderbändern.";
+  if(game.powerCap===0) return "🔋 Tipp: Ein <b>Energiespeicher</b> hält deine Fabrik nachts am Laufen, wenn Solar pausiert.";
+  if(game.money<150) return "💵 Dein Geld wird knapp — sorge dafür, dass mehr Chips beim Versand ankommen.";
+  return "✅ Sieht gut aus! Erweitere die Produktion und puffere mit 🔋 Energiespeicher / 🛢️ Wassertank gegen die Nacht.";
+}
+function showTip(){ const box=document.getElementById('tipbox'); box.innerHTML="💡 <b>Tipp:</b> "+nextTip();
+  box.classList.remove('hide'); clearTimeout(showTip._t); showTip._t=setTimeout(()=>box.classList.add('hide'),6500); }
+
 /* ===================== LOOP ===================== */
 const clock=new THREE.Clock();
 let started=false;
@@ -623,7 +697,10 @@ function loop(){
   requestAnimationFrame(loop);
   const dt=Math.min(clock.getDelta(),.05);
   if(started){
-    computeUtilities();
+    game.timeOfDay=(game.timeOfDay + dt/DAYLEN)%1;
+    game.sun=Math.max(0, Math.sin(game.timeOfDay*Math.PI*2));
+    applyDayNight();
+    computeUtilities(dt);
     tickWork(dt);
     moveItems(dt);
     autoBuy(dt);
