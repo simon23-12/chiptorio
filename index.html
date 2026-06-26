@@ -358,7 +358,7 @@ const STAGES = [
     const cru=new THREE.Mesh(new THREE.CylinderGeometry(1.6,1.3,1.2,40),M(0x3a2418,{roughness:.9})); cru.position.y=.6; g.add(cru);
     const melt=new THREE.Mesh(new THREE.CylinderGeometry(1.45,1.45,.2,40),
       new THREE.MeshStandardMaterial({color:0xff7722,emissive:0xff5500,emissiveIntensity:1.2})); melt.position.y=1.1; g.add(melt);
-    g.add(Object.assign(glow(0xff7733,2),{position:new THREE.Vector3(0,1.2,0)}));
+    const czGlow=glow(0xff7733,2); czGlow.position.set(0,1.2,0); g.add(czGlow);
     const boule=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,.1,32),M(0xc6d2e4,{metalness:.95,roughness:.15}));
     boule.position.y=1.25; g.add(boule);
     let grown=0, pull=1.0, rot=1.0, integrity=1;
@@ -369,24 +369,28 @@ const STAGES = [
         <input id="ps" type="range" min="0.3" max="4" step="0.1" value="2.5"><span id="pv">2,5 (ideal ≈ 1,2)</span></div>
       <div class="slider">Drehung (U/min)
         <input id="rs" type="range" min="2" max="30" step="1" value="6"><span id="rv">6 U/min</span></div>
-      <button id="grow">Barren ziehen ⤒</button>
-      <span class="readout">Länge: <b id="ln">0,0</b> cm · Korn: <b id="gr">100 %</b></span>`);
+      <button id="grow">Barren ziehen ⤒ (0/4)</button>
+      <span class="readout">Länge: <b id="ln">0</b> cm · Kristallgüte: <b id="gr">100 %</b></span>`);
     const ps=el('ps'),rs=el('rs');
     ps.oninput=()=>{el('pv').textContent=de((+ps.value).toFixed(1))+" (ideal ≈ 1,2)";};
     rs.oninput=()=>{el('rv').textContent=rs.value+" U/min"; rot=+rs.value/6;};
-    api.setHint("Zieh langsam (~1,2 mm/min), um einen Einkristall zu erhalten. Klicke ein paar Mal auf Ziehen, um den Boule wachsen zu lassen.");
+    api.setHint("Auftrag: Stell die Ziehgeschwindigkeit langsam ein (~1,2 mm/min) und klicke dann 4× auf „Barren ziehen“, um den Einkristall hochzuziehen. Je langsamer, desto höher die Kristallgüte.");
     disableRun();
+    let pulls=0;
     el('grow').onclick=()=>{
+      if(pulls>=4) return;
       pull=+ps.value;
       const speedErr=Math.max(0,(pull-1.2))/2.8;
-      integrity = Math.max(.3, integrity - speedErr*0.18 - 0.01);
-      grown+=0.9; const h=grown*0.18;
+      integrity = Math.max(.3, integrity - speedErr*0.16);
+      pulls++; grown+=1; const h=grown*0.3;
       boule.geometry.dispose(); boule.geometry=new THREE.CylinderGeometry(.42,.42,h,32);
       boule.position.y=1.2+h/2;
       boule.material.color.setHSL(.58,.15,.4+integrity*.4);
-      el('ln').textContent=de((grown*4).toFixed(1));
+      el('ln').textContent=de((grown*50).toFixed(0));
       el('gr').textContent=Math.round(integrity*100)+" %";
-      if(grown>=4){ enableRun(); api.setHint("Boule gewachsen. Abkühlen und entnehmen."); }
+      el('grow').textContent=`Barren ziehen ⤒ (${pulls}/4)`;
+      if(pulls>=4){ enableRun(); el('grow').disabled=true;
+        api.setHint("Boule fertig (Kristallgüte "+Math.round(integrity*100)+" %). Jetzt unten rechts „Schritt ausführen“."); }
     };
     api.onRun(()=>{
       const p = 90+integrity*9.9;
