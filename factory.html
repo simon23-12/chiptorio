@@ -78,6 +78,11 @@
   #tip{position:fixed;z-index:20;pointer-events:none;background:#06101fee;border:1px solid var(--line);
     border-radius:8px;padding:6px 9px;font-size:11px;font-family:var(--mono);display:none;max-width:220px}
   #tip .s{color:var(--dim)}
+  #labels{position:fixed;inset:0;z-index:9;pointer-events:none}
+  .blabel{position:absolute;transform:translate(-50%,-115%);background:#06101fe6;border:1px solid var(--line);
+    border-radius:7px;padding:3px 7px;font-size:10px;font-family:var(--mono);line-height:1.4;white-space:nowrap;display:none}
+  .blabel .t{color:var(--acc2);font-weight:700}
+  .blabel .p{color:var(--good)} .blabel .u{color:var(--dim)} .blabel .w{color:var(--bad)} .blabel .s{color:var(--dim)}
 </style>
 </head>
 <body>
@@ -102,6 +107,7 @@
   <div id="sup-list"></div>
 </div>
 
+<div id="labels"></div>
 <div id="tip"></div>
 <div id="toast"></div>
 
@@ -109,7 +115,7 @@
   <h1>🏭 Fabrik bauen</h1>
   <p style="color:var(--dim);max-width:560px;margin:0">Baue die Lieferkette vom Quarzsand bis zum Chip. Verbinde die Maschinen mit Förderbändern und halte Strom, Wasser, Rohstoffe und Geld im Gleichgewicht.</p>
   <div class="chain" id="chaintext"></div>
-  <p class="ctrl"><b>Steuerung:</b> &nbsp;<kbd>Linksklick</kbd> bauen · <kbd>Ziehen</kbd> Kamera drehen · Förderband/Abriss <kbd>ziehen</kbd> zum Verlegen · <kbd>R</kbd> drehen · <kbd>Rechtsklick</kbd> abreißen · <kbd>1</kbd>–<kbd>0</kbd> Werkzeug · <kbd>Mausrad</kbd> zoomen</p>
+  <p class="ctrl"><b>Steuerung:</b> &nbsp;<kbd>Linksklick</kbd> bauen · <kbd>Ziehen</kbd> Kamera drehen · Förderband/Abriss <kbd>ziehen</kbd> zum Verlegen · <kbd>R</kbd> drehen · <kbd>Rechtsklick</kbd> abreißen · <kbd>1</kbd>–<kbd>0</kbd> Werkzeug · <kbd>i</kbd> Gebäude-Infos · <kbd>Mausrad</kbd> zoomen</p>
   <button class="big" id="startbtn">▶ Fabrik starten</button>
 </div>
 
@@ -236,27 +242,66 @@ let items = [];
 
 /* ===================== GEBÄUDE-MESH ===================== */
 function makeMesh(kind,dir){
-  const g = new THREE.Group(); const d = DEF[kind];
+  const g = new THREE.Group(); const d = DEF[kind]; let indY=0.82;
+  const add=(m,x,y,z,rx,ry,rz)=>{ m.position.set(x||0,y||0,z||0); if(rx)m.rotation.x=rx; if(ry)m.rotation.y=ry; if(rz)m.rotation.z=rz; g.add(m); return m; };
+  const B=(w,h,dd,c,o)=>new THREE.Mesh(new THREE.BoxGeometry(w,h,dd),mat(c,o));
+  const C=(rt,rb,h,c,o,s=16)=>new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,s),mat(c,o));
+  const SP=(r,c,o)=>new THREE.Mesh(new THREE.SphereGeometry(r,14,14),mat(c,o));
+  const CO=(r,h,c,o,s=12)=>new THREE.Mesh(new THREE.ConeGeometry(r,h,s),mat(c,o));
+
   if(kind==="belt"){
-    const p = new THREE.Mesh(new THREE.BoxGeometry(.92,.08,.92), mat(0x2b3a52,{roughness:.8}));
-    p.position.y=.05; g.add(p);
-    const a = new THREE.Mesh(new THREE.ConeGeometry(.17,.34,4), mat(0x66d0ff,{emissive:0x123244,emissiveIntensity:1}));
-    a.rotation.x=Math.PI/2; a.position.set(0,.13,.06); g.add(a); g.userData.arrow=a;
-  } else if(kind==="belt"){ }
-  else {
-    const body = new THREE.Mesh(new THREE.BoxGeometry(.84,.55,.84), mat(d.col,{roughness:.55}));
-    body.position.y=.3; g.add(body);
-    // Akzentdach
-    const top = new THREE.Mesh(new THREE.BoxGeometry(.6,.08,.6), mat(d.col).clone());
-    top.material = mat(0xffffff,{transparent:true,opacity:.08}); top.position.y=.6; g.add(top);
-    const ind = new THREE.Mesh(new THREE.SphereGeometry(.1,12,12), mat(0x44ff88,{emissive:0x115522,emissiveIntensity:1}));
-    ind.position.set(0,.74,0); g.add(ind); g.userData.ind=ind;
-    if(RECIPES[kind] || SOURCES[kind]){
-      const a = new THREE.Mesh(new THREE.ConeGeometry(.1,.22,4), mat(0xffffff,{emissive:0x333333}));
-      a.rotation.x=Math.PI/2; a.position.set(0,.3,.5); g.add(a);
-    }
+    add(B(.92,.07,.92,0x2b3a52,{roughness:.8}),0,.05,0);
+    add(B(.92,.05,.1,0x18243c),0,.1,-.41); add(B(.92,.05,.1,0x18243c),0,.1,.41);
+    const a=add(CO(.16,.3,0x66d0ff,{emissive:0x123244,emissiveIntensity:1},4),0,.14,.05,Math.PI/2); g.userData.arrow=a;
+    g.rotation.y=ROT[dir]; return g;
   }
-  g.rotation.y = ROT[dir];
+  switch(kind){
+    case "sandmine": // Grube + Sandhaufen
+      add(B(.8,.26,.8,0x5a4a30),0,.13,0);
+      add(CO(.34,.42,0xd9c08a,{},16),0,.48,0); indY=.92; break;
+    case "coalmine": // Haufen schwarzer Brocken
+      add(B(.8,.26,.8,0x2e2e2e),0,.13,0);
+      add(SP(.17,0x1b1b1b),0,.38,-.05); add(SP(.15,0x262626),.18,.36,.12); add(SP(.14,0x141414),-.16,.34,.14); indY=.74; break;
+    case "solar": // gekippte Panele auf Pfosten
+      add(B(.12,.34,.12,0x3a4658),0,.17,0);
+      add(B(.74,.04,.52,0x163a6a,{emissive:0x1f56a0,emissiveIntensity:.6,metalness:.4,roughness:.3}),0,.42,0,-0.5); indY=.74; break;
+    case "pump": // Tank + Rohr
+      add(C(.3,.3,.5,0x2a8fb0,{metalness:.5}),0,.3,0);
+      add(C(.32,.32,.06,0x1d6f8a),0,.57,0); add(B(.1,.46,.1,0x1d6f8a),.34,.27,0); indY=.84; break;
+    case "furnace": // Tiegel mit glühender Schmelze + Elektroden
+      add(C(.36,.3,.46,0x6b3a24,{roughness:.85}),0,.25,0);
+      add(C(.31,.31,.07,0xff5a00,{emissive:0xff4400,emissiveIntensity:1.3}),0,.5,0);
+      [[.18,.18],[-.2,.05],[.05,-.2]].forEach(p=>add(C(.04,.04,.5,0x1c1c1c),p[0],.62,p[1])); indY=.94; break;
+    case "siemens": // Destillationssäule mit Ringen
+      add(B(.5,.16,.5,0x2c4a38),0,.08,0);
+      add(C(.17,.17,.78,0x4a7a55,{metalness:.4}),0,.55,0);
+      add(C(.21,.21,.05,0x6fae82),0,.45,0); add(C(.21,.21,.05,0x6fae82),0,.66,0); indY=1.02; break;
+    case "crystal": // Tiegel + dünner Ziehstab + Barren
+      add(C(.3,.24,.32,0x5a4a6a),0,.18,0);
+      add(C(.26,.26,.06,0xff6a00,{emissive:0xff5500,emissiveIntensity:1}),0,.36,0);
+      add(C(.03,.03,.66,0xcfcfcf,{metalness:.7}),0,.66,0);
+      add(CO(.12,.26,0xbcd0ec,{emissive:0x223344,emissiveIntensity:.4}),0,.5,0,Math.PI); indY=1.05; break;
+    case "waferplant": // gestapelte Wafer-Scheiben
+      add(B(.7,.1,.7,0x2c3e58),0,.05,0);
+      [.18,.3,.42,.54].forEach(y=>add(C(.3,.3,.05,0x9fb3c9,{metalness:.6,roughness:.25}),0,y,0)); indY=.84; break;
+    case "fab": // Reinraum-Box mit Kuppel/Lithografie
+      add(B(.82,.46,.82,0x8a4fa0,{roughness:.5}),0,.25,0);
+      add(SP(.2,0x9fb3ff,{transparent:true,opacity:.5,emissive:0x335588,emissiveIntensity:.5}),0,.5,0);
+      add(B(.1,.12,.1,0x5fd0ff,{emissive:0x2277cc,emissiveIntensity:.7}),.28,.55,.28); indY=.9; break;
+    case "packaging": // Chip-Gehäuse mit goldenem Die + Beinchen
+      add(B(.62,.18,.62,0x141414),0,.18,0);
+      add(B(.32,.07,.32,0xffd24a,{emissive:0x4a3a00,emissiveIntensity:.4,metalness:.6}),0,.3,0);
+      [[.27,.27],[.27,-.27],[-.27,.27],[-.27,-.27]].forEach(p=>add(B(.05,.16,.05,0xb0b0b0),p[0],.08,p[1])); indY=.8; break;
+    case "seller": // LKW (Anhänger + Kabine + Räder)
+      add(B(.5,.3,.4,0x3a9a5a),-.05,.22,0);
+      add(B(.24,.26,.36,0x2e7d48),.34,.2,0);
+      [[-.18,.2],[-.18,-.2],[.3,.2],[.3,-.2]].forEach(p=>add(SP(.08,0x111111),p[0],.06,p[1])); indY=.74; break;
+    default:
+      add(B(.8,.5,.8,d?d.col:0x888888),0,.3,0);
+  }
+  const ind=SP(.1,0x44ff88,{emissive:0x115522,emissiveIntensity:1}); add(ind,0,indY,0); g.userData.ind=ind;
+  if(RECIPES[kind]||SOURCES[kind]){ const a=CO(.1,.22,0xffffff,{emissive:0x333333}); add(a,0,.3,.52,Math.PI/2); }
+  g.rotation.y=ROT[dir];
   return g;
 }
 
@@ -391,19 +436,21 @@ function place(kind,x,z){
   game.money -= cost;
   const mesh = makeMesh(kind,placeDir); const [wx,wz]=tileToWorld(x,z); mesh.position.set(wx,0,wz); scene.add(mesh);
   const b = {kind,x,z,dir:placeDir,mesh,t:0,buf:{},outBuf:0,outType:null,want:false};
+  if(kind!=="belt"){ const lab=document.createElement('div'); lab.className="blabel"; document.getElementById('labels').appendChild(lab); b.labelEl=lab; }
   grid_.set(k(x,z),b); buildings.push(b);
 }
 function removeAt(x,z){
   const b = grid_.get(k(x,z)); if(!b) return;
   game.money += Math.round(DEF[b.kind].cost*0.5);
   scene.remove(b.mesh); grid_.delete(k(x,z));
+  if(b.labelEl) b.labelEl.remove();
   buildings.splice(buildings.indexOf(b),1);
   for(const it of items){ if(it.x===x&&it.z===z){ it._dead=true; scene.remove(it.mesh); } }
   items = items.filter(i=>!i._dead);
 }
 
 /* ===================== EINGABE ===================== */
-let tool = "belt", placeDir = 1, hoverTile=null, laying=false, lastTile=null, downX=0,downY=0,dragged=false;
+let tool = "belt", placeDir = 1, hoverTile=null, laying=false, lastTile=null, downX=0,downY=0,dragged=false, labelsOn=false;
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
 function pickTile(e){
   ndc.x=(e.clientX/innerWidth)*2-1; ndc.y=-(e.clientY/innerHeight)*2+1;
@@ -438,6 +485,7 @@ dom.addEventListener('contextmenu',e=>{ e.preventDefault(); const t=pickTile(e);
 addEventListener('keydown',e=>{
   const key=e.key.toLowerCase();
   if(key==="r"){ placeDir=(placeDir+1)%4; updateGhost(); }
+  else if(key==="i"){ labelsOn=!labelsOn; updateLabels(); toast(labelsOn?"Gebäude-Infos: AN (i)":"Gebäude-Infos: AUS (i)",0x34e0c0); }
   else if(KEYMAP[key]){ selectTool(KEYMAP[key]); }
   else if(key==="escape"){ document.getElementById('intro').classList.add('hide'); }
 });
@@ -535,6 +583,39 @@ function updateHUD(){
   document.getElementById('s-rate').textContent=(game.soldWindow.length*CHIP_PRICE);
 }
 
+/* ===================== INFO-SCHILDER (Taste i) ===================== */
+function labelHTML(b){
+  const d=DEF[b.kind]; let out=`<span class="t">${d.ic} ${d.name}</span>`;
+  if(b.kind==="solar") out+=`<br><span class="p">+${d.powerGen} ⚡ Strom</span>`;
+  else if(b.kind==="pump") out+=`<br><span class="p">+${d.waterGen} 💧 Wasser</span><br><span class="u">-${d.powerUse} ⚡</span>`;
+  else if(SOURCES[b.kind]) out+=`<br><span class="p">→ ${ITEMS[SOURCES[b.kind].out].name}</span><br><span class="u">-${d.powerUse} ⚡</span>`;
+  else if(RECIPES[b.kind]){ const r=RECIPES[b.kind];
+    out+=`<br><span class="p">→ ${ITEMS[r.out].name}${r.outCount?(" ×"+r.outCount):""}</span>`;
+    let u=[]; if(d.powerUse)u.push(`-${d.powerUse} ⚡`); if(d.waterUse)u.push(`-${d.waterUse} 💧`);
+    if(u.length) out+=`<br><span class="u">${u.join(" · ")}</span>`;
+  }
+  else if(b.kind==="seller") out+=`<br><span class="p">Chip → +${CHIP_PRICE} 💵</span>`;
+  const st=statusOf(b)[0];
+  if(st==="kein Strom"){ const def=Math.max(0,game.powerDemand-game.powerGen); out+=`<br><span class="w">⚠ Strom fehlt${def?` −${def} ⚡`:""}</span>`; }
+  else if(st==="kein Wasser"){ const def=Math.max(0,game.waterDemand-game.waterGen); out+=`<br><span class="w">⚠ Wasser fehlt −${def} 💧</span>`; }
+  else if(st==="Vorrat leer") out+=`<br><span class="w">⚠ Vorrat leer</span>`;
+  else if(st==="wartet auf Material") out+=`<br><span class="s">… wartet auf Material</span>`;
+  else if(st==="Ausgang voll") out+=`<br><span class="s">Ausgang voll</span>`;
+  return out;
+}
+const _lv=new THREE.Vector3();
+function updateLabels(){
+  for(const b of buildings){ if(!b.labelEl) continue;
+    if(!labelsOn){ b.labelEl.style.display="none"; continue; }
+    const [wx,wz]=tileToWorld(b.x,b.z); _lv.set(wx,1.2,wz); _lv.project(camera);
+    if(_lv.z>1){ b.labelEl.style.display="none"; continue; }
+    b.labelEl.style.display="block";
+    b.labelEl.style.left=((_lv.x*0.5+0.5)*innerWidth)+"px";
+    b.labelEl.style.top=((-_lv.y*0.5+0.5)*innerHeight)+"px";
+    b.labelEl.innerHTML=labelHTML(b);
+  }
+}
+
 /* ===================== LOOP ===================== */
 const clock=new THREE.Clock();
 let started=false;
@@ -549,6 +630,7 @@ function loop(){
     updateIndicators();
     updateSupplies();
     updateHUD();
+    updateLabels();
   }
   // Belt-Pfeile pulsieren
   const pulse=.6+.4*Math.sin(performance.now()*.006);
