@@ -136,12 +136,12 @@ const renderer = new THREE.WebGLRenderer({antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.setSize(innerWidth,innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
+renderer.toneMappingExposure = 1.28;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x05080f);
-scene.fog = new THREE.Fog(0x05080f, 14, 38);
+scene.background = new THREE.Color(0x0e1626);
+scene.fog = new THREE.Fog(0x0e1626, 20, 50);
 
 const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.1, 200);
 camera.position.set(0,3.2,9);
@@ -151,13 +151,15 @@ controls.enableDamping = true; controls.dampingFactor = .08;
 controls.minDistance = 3; controls.maxDistance = 20;
 controls.target.set(0,1.4,0);
 
-scene.add(new THREE.HemisphereLight(0x6688cc, 0x0a0e18, .8));
-const key = new THREE.DirectionalLight(0xffffff, 1.4); key.position.set(6,9,5); scene.add(key);
-const rim = new THREE.DirectionalLight(0x44ffe0, .6); rim.position.set(-6,3,-6); scene.add(rim);
+scene.add(new THREE.AmbientLight(0xafc2e0, .55));
+scene.add(new THREE.HemisphereLight(0xbcd2f0, 0x1a2438, 1.15));
+const key = new THREE.DirectionalLight(0xffffff, 1.7); key.position.set(6,9,5); scene.add(key);
+const fill = new THREE.DirectionalLight(0xcfe0ff, .8); fill.position.set(-5,6,7); scene.add(fill);
+const rim = new THREE.DirectionalLight(0x66ffe6, .8); rim.position.set(-6,3,-6); scene.add(rim);
 
 // floor grid
-const grid = new THREE.GridHelper(60,60,0x1d3050,0x111d33);
-grid.position.y=0; grid.material.opacity=.4; grid.material.transparent=true; scene.add(grid);
+const grid = new THREE.GridHelper(60,60,0x33507e,0x1b2c48);
+grid.position.y=0; grid.material.opacity=.5; grid.material.transparent=true; scene.add(grid);
 
 addEventListener('resize',()=>{
   camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
@@ -228,7 +230,7 @@ function wafer(color=0xb8c4d6,r=2,h=.12){
 const STAGES = [
 {
   name:"Quarzsand", in:"Siliciumdioxid-reicher Sand (SiO₂)", out:"Sortierter hochreiner Quarz",
-  desc:"Alles beginnt mit Siliciumdioxid. Hochreiner Quarzsand (~99 % SiO₂) wird abgebaut und gesiebt. Je sauberer das Ausgangsgestein, desto weniger Aufbereitung später — also sortierst du zuerst Feldspat und eisenhaltige Körner aus.",
+  desc:"Alles beginnt mit ganz normalem Sand — genauer mit Quarz, also Siliciumdioxid (SiO₂). Je reiner der Sand schon ist, desto weniger Arbeit macht die Reinigung später. Deshalb sortierst du zuerst die störenden, eisenhaltigen Körner aus.",
   chem:"Rohstoff:  SiO₂  (Siliciumdioxid)\nZielqualität:  >99 % SiO₂, wenig Fe/Al",
   fact:"Ein typischer 200-mm-Wafer braucht nur wenige Gramm Silizium — aber es muss 99,9999999 % rein sein: 9 Neunen.",
   build(g,api){
@@ -240,7 +242,7 @@ const STAGES = [
       grains.setMatrixAt(i,d.matrix);
     } g.add(grains);
     let impur=[];
-    for(let i=0;i<8;i++){ const m=new THREE.Mesh(new THREE.IcosahedronGeometry(.13,0),M(0xc44,{emissive:0x551111}));
+    for(let i=0;i<8;i++){ const m=new THREE.Mesh(new THREE.IcosahedronGeometry(.13,0),M(0xcc4444,{emissive:0x551111}));
       const a=Math.random()*6.28,r=Math.sqrt(Math.random())*2.4; m.position.set(Math.cos(a)*r,.25,Math.sin(a)*r);
       m.userData.imp=true; g.add(m); impur.push(m); }
     api.addUpdater(dt=>{ grains.rotation.y+=dt*.06; });
@@ -267,7 +269,7 @@ const STAGES = [
 },
 {
   name:"Metallurgisches Silizium", in:"Quarz + Kohlenstoff (Koks/Kohle/Holz)", out:"MG-Si (~98–99 % Si)",
-  desc:"In einem Lichtbogenofen bei ~1900 °C entzieht Kohlenstoff dem Quarz den Sauerstoff — carbothermische Reduktion. Heraus kommt metallurgisches Silizium, noch viel zu schmutzig für Chips. Halte das Kohlenstoff-Verhältnis richtig: zu wenig verschwendet SiO₂, zu viel hinterlässt Siliciumcarbid.",
+  desc:"In einem riesigen Ofen wird der Sand bei rund 1900 °C zusammen mit Kohlenstoff erhitzt. Der Kohlenstoff reißt dem Sand den Sauerstoff weg — übrig bleibt reines Silizium. Für Chips ist es aber noch viel zu schmutzig. Wichtig ist die richtige Menge Kohlenstoff: zu wenig, und es bleibt Sand übrig; zu viel, und es entsteht hartes Siliciumcarbid.",
   chem:"SiO₂ + 2 C  →  Si + 2 CO↑    (≈ 1900 °C, Lichtbogen)\nNeben:  SiO₂ + 3 C → SiC + 2 CO  (zu viel Kohlenstoff)",
   fact:"Ein energiehungriger Brachialschritt: Eine Tonne MG-Si verbraucht ~11–13 MWh Strom.",
   build(g,api){
@@ -278,12 +280,12 @@ const STAGES = [
     melt.position.y=1.3; g.add(melt);
     const L=glow(0xff6622,3); L.position.set(0,1.6,0); g.add(L);
     const elec=[];
-    for(let i=0;i<3;i++){ const a=i/3*6.28; const e=new THREE.Mesh(new THREE.CylinderGeometry(.22,.22,2.4,16),M(0x222,{roughness:.5}));
+    for(let i=0;i<3;i++){ const a=i/3*6.28; const e=new THREE.Mesh(new THREE.CylinderGeometry(.22,.22,2.4,16),M(0x222222,{roughness:.5}));
       e.position.set(Math.cos(a)*.9,2.6,Math.sin(a)*.9); g.add(e); elec.push(e);
       const sp=glow(0x88ddff,1.5); sp.position.set(Math.cos(a)*.9,1.45,Math.sin(a)*.9); g.add(sp);
     }
     const smoke=new THREE.InstancedMesh(new THREE.SphereGeometry(.12,6,6),
-      new THREE.MeshStandardMaterial({color:0x99a,transparent:true,opacity:.18}),40);
+      new THREE.MeshStandardMaterial({color:0x9999aa,transparent:true,opacity:.18}),40);
     const sd=new THREE.Object3D(), sp=[];
     for(let i=0;i<40;i++){ sp.push({y:rnd(1.5,5),a:rnd(0,6),r:rnd(.2,1.4),s:rnd(.4,1.2)}); }
     g.add(smoke);
@@ -318,7 +320,7 @@ const STAGES = [
 },
 {
   name:"Elektronik-Silizium (Reinst-Silizium)", in:"MG-Si + HCl", out:"EG-Si / Polysilizium (9N, 99,9999999 %)",
-  desc:"Der Siemens-Prozess. MG-Si reagiert mit Chlorwasserstoff zu flüssigem Trichlorsilan, das durch fraktionierte Destillation extrem rein wird und dann mit Wasserstoff wieder auf heiße Siliziumstäbe abgeschieden wird. Hier wird Silizium elektronik-rein: 9 Neunen.",
+  desc:"Jetzt wird das Silizium superrein gemacht. Dafür verwandelt man es in ein Gas und destilliert es immer wieder (ähnlich wie man Wasser durch Verdampfen reinigt). Danach scheidet es sich wieder fest auf heißen Stäben ab. Ergebnis: Silizium, das zu 99,9999999 % rein ist — man sagt „9 Neunen“.",
   chem:"Si + 3 HCl  →  SiHCl₃ + H₂          (Trichlorsilan bilden, ~300 °C)\nSiHCl₃ + H₂  →  Si + 3 HCl    (auf Stäbe abscheiden, ~1100 °C)",
   fact:"Nach der Destillation liegen Verunreinigungen unter 1 ppb — wie ein falsches Korn in einem ganzen Schwimmbecken voll Sand.",
   build(g,api){
@@ -351,7 +353,7 @@ const STAGES = [
 },
 {
   name:"Einkristall-Barren — Czochralski", in:"Geschmolzenes EG-Si + Impfkristall", out:"Einkristalliner Si-Barren (Boule)",
-  desc:"Polysilizium wird bei 1414 °C geschmolzen. Ein winziger Impfkristall berührt die Oberfläche und wird langsam unter Drehung nach oben gezogen — Atome ordnen sich am Gitter des Keims an und es wächst ein durchgehender Einkristall. Ziehst du zu schnell, verliert der Kristall seine Einkorn-Struktur.",
+  desc:"Das reine Silizium wird bei 1414 °C geschmolzen. Ein winziges Kristallstück (der „Impfkristall“) wird eingetaucht und ganz langsam drehend nach oben gezogen. Dabei hängen sich die Atome ordentlich an — wie bei einer wachsenden Eissäule — und es entsteht ein einziger, riesiger Kristall. Ziehst du zu schnell, wird der Kristall unordentlich.",
   chem:"Si(f) → Si(l)  bei 1414 °C, dann geordnete Wiedererstarrung\nDotierung in der Schmelze legt den Grundtyp fest:  B → p-Typ,  P → n-Typ",
   fact:"Ein moderner Boule ist 300 mm dick, ~2 m lang und über 250 kg schwer — und doch ein einziger, nahezu fehlerfreier Kristall.",
   build(g,api){
@@ -402,14 +404,14 @@ const STAGES = [
 },
 {
   name:"Wafer-Sägen", in:"Silizium-Boule", out:"Dünne Si-Wafer",
-  desc:"Die Enden des Boules werden gekappt, er wird auf exakten Durchmesser geschliffen und dann von einer Diamant-Drahtsäge in unter einen Millimeter dünne Wafer geschnitten. Zu schneller Vorschub bricht oder verzieht die Wafer; der Sägeverlust (Kerf) ist reines, für immer verlorenes Silizium.",
+  desc:"Der lange Kristallstab (Boule) wird mit einer feinen Diamant-Drahtsäge in hauchdünne Scheiben geschnitten — die Wafer. Jede ist dünner als ein Millimeter. Sägst du zu schnell, brechen die Scheiben. Und alles, was beim Sägen zu Staub wird, ist teures Silizium, das verloren geht.",
   chem:"Mechanisch: diamantbesetzter Draht, ~0,1 mm Schnittbreite\nTausende paralleler Drähte zersägen den ganzen Boule auf einmal",
   fact:"Bis zu ~40 % des kostbaren Kristalls können als Sägeverlust enden — darum ist schnittverlustfreies Sägen ein heißes Forschungsthema.",
   build(g,api){
     const boule=new THREE.Mesh(new THREE.CylinderGeometry(1.4,1.4,5,48),M(0xc6d2e4,{metalness:.95,roughness:.15}));
     boule.rotation.z=Math.PI/2; boule.position.y=1.6; g.add(boule);
     const wires=new THREE.Group();
-    for(let i=-12;i<=12;i++){ const w=new THREE.Mesh(new THREE.CylinderGeometry(.01,.01,3,6),M(0x888,{metalness:1}));
+    for(let i=-12;i<=12;i++){ const w=new THREE.Mesh(new THREE.CylinderGeometry(.01,.01,3,6),M(0x888888,{metalness:1}));
       w.position.x=i*0.18; wires.add(w);} wires.position.y=1.6; g.add(wires);
     let slicing=false, prog=0, speed=1.0;
     api.addUpdater(dt=>{ if(slicing){ wires.position.y-=dt*1.4*speed; prog+=dt*0.5*speed;
@@ -432,13 +434,13 @@ const STAGES = [
 },
 {
   name:"Wafer-Politur (Läppen & CMP)", in:"Frisch gesägter Wafer", out:"Spiegelglatter Wafer",
-  desc:"Frisch gesägte Wafer sind rau und verspannt. Läppen und chemisch-mechanisches Polieren machen eine Seite atomar eben und spiegelglatt — Ebenheit auf wenige Nanometer über 300 mm. Ohne das kann die spätere Lithografie nicht scharf stellen.",
+  desc:"Frisch gesägte Wafer sind rau. Hier werden sie spiegelglatt poliert — so eben, dass kein Kratzer mehr zu sehen ist. Das ist wichtig, weil später winzige Muster gestochen scharf darauf abgebildet werden müssen. Poliere aber nicht zu lange, sonst wird der Wafer zu dünn.",
   chem:"Mechanischer Abrieb + chemischer Slurry (kolloidales SiO₂, alkalisch)\nKanten verrundet; geschädigte Oberflächenschicht entfernt",
   fact:"Ein fertiger Wafer ist so eben, dass — auf Fußballfeldgröße skaliert — die höchste Erhebung unter einem Millimeter läge.",
   build(g,api){
     const w=wafer(0x9aa6b8,2,.1); w.position.y=1.2; g.add(w);
-    const pad=new THREE.Mesh(new THREE.CylinderGeometry(2.6,2.6,.3,48),M(0x223,{roughness:1})); pad.position.y=.9; g.add(pad);
-    const head=new THREE.Mesh(new THREE.CylinderGeometry(2.1,2.1,.2,48),M(0x445,{roughness:.6})); head.position.y=1.4; g.add(head);
+    const pad=new THREE.Mesh(new THREE.CylinderGeometry(2.6,2.6,.3,48),M(0x222233,{roughness:1})); pad.position.y=.9; g.add(pad);
+    const head=new THREE.Mesh(new THREE.CylinderGeometry(2.1,2.1,.2,48),M(0x444455,{roughness:.6})); head.position.y=1.4; g.add(head);
     let polish=0, smooth=.05;
     api.addUpdater(dt=>{ pad.rotation.y+=dt*1.5; head.rotation.y-=dt*1.2;
       w.material.roughness=Math.max(.04,smooth); });
@@ -461,7 +463,7 @@ const STAGES = [
 },
 {
   name:"Thermische Oxidation", in:"Blanker Si-Wafer + O₂/H₂O", out:"Wafer mit SiO₂-Gate-/Isolationsschicht",
-  desc:"Bei ~1000 °C in Sauerstoff oder Wasserdampf wächst auf der Siliziumoberfläche sein eigenes Glas: eine präzise Siliciumdioxid-Schicht. Dieses isolierende Oxid wird zum Gate-Dielektrikum und zur Maske. Trockene Oxidation ist langsam, aber hochwertig; nasse (Dampf) ist schneller, aber rauer.",
+  desc:"Erhitzt man den Wafer in Sauerstoff, wächst auf seiner Oberfläche eine dünne Glasschicht aus Siliciumdioxid — das Silizium „rostet“ sozusagen kontrolliert. Diese Schicht leitet keinen Strom (sie isoliert) und schützt das Silizium. Ihre Dicke muss genau stimmen.",
   chem:"Trocken:  Si + O₂ → SiO₂            (dicht, hohe Qualität)\nNass:  Si + 2 H₂O → SiO₂ + 2 H₂   (schnelleres Wachstum)",
   fact:"Die Oxiddicke zeigt sich als Farbe: Die schillernden Töne auf einem Wafer sind Dünnschicht-Interferenz am SiO₂.",
   build(g,api){
@@ -470,7 +472,7 @@ const STAGES = [
       new THREE.MeshStandardMaterial({color:0x3366aa,metalness:.6,roughness:.2,transparent:true,opacity:.0}));
     oxide.position.y=1.37; g.add(oxide);
     const tube=new THREE.Mesh(new THREE.CylinderGeometry(2.6,2.6,4,40,1,true),
-      new THREE.MeshStandardMaterial({color:0x552,emissive:0x331100,emissiveIntensity:.6,side:THREE.DoubleSide,transparent:true,opacity:.25}));
+      new THREE.MeshStandardMaterial({color:0x555522,emissive:0x331100,emissiveIntensity:.6,side:THREE.DoubleSide,transparent:true,opacity:.25}));
     tube.rotation.z=Math.PI/2; tube.position.y=1.35; g.add(tube);
     let growth=0;
     api.addUpdater(dt=>{ w.rotation.y+=dt*.3; tube.material.emissiveIntensity=.5+Math.sin(performance.now()*.004)*.3;});
@@ -494,11 +496,11 @@ const STAGES = [
 },
 {
   name:"Fotolack-Beschichtung", in:"Oxidierter Wafer + flüssiger Lack", out:"Lackbeschichteter Wafer",
-  desc:"Ein Tropfen lichtempfindliches Polymer (Fotolack) wird mit mehreren tausend U/min über den Wafer geschleudert und so zu einem ultragleichmäßigen Dünnfilm verteilt, dann vorgebacken. Die Drehzahl bestimmt die Dicke: schneller = dünner. Ungleichmäßige Schichten ruinieren später das Muster.",
+  desc:"Ein Tropfen lichtempfindlicher Lack kommt auf den Wafer, der sich dann blitzschnell dreht. Dadurch verteilt sich der Lack zu einer hauchdünnen, gleichmäßigen Schicht — wie Teig, der durch Schleudern dünn wird. Je schneller die Drehung, desto dünner die Schicht.",
   chem:"Schleuderbeschichtung: Dicke ∝ 1/√(U/min)\nDann Vorbacken ~90–100 °C, um Lösungsmittel auszutreiben",
   fact:"Das ganze Beschichten und Belichten passiert unter gelbem Licht — Fotolack ist für Gelb blind, deshalb leuchten Fabs bernsteinfarben.",
   build(g,api){
-    const chuck=new THREE.Mesh(new THREE.CylinderGeometry(1.9,1.9,.2,48),M(0x334,{roughness:.5})); chuck.position.y=1; g.add(chuck);
+    const chuck=new THREE.Mesh(new THREE.CylinderGeometry(1.9,1.9,.2,48),M(0x333344,{roughness:.5})); chuck.position.y=1; g.add(chuck);
     const w=wafer(0x9fb3c9,2,.1); w.position.y=1.15; g.add(w);
     const film=new THREE.Mesh(new THREE.CylinderGeometry(2,2,.03,64),
       new THREE.MeshStandardMaterial({color:0xff4477,emissive:0x330011,roughness:.3,transparent:true,opacity:0})); film.position.y=1.22; g.add(film);
@@ -522,11 +524,11 @@ const STAGES = [
 },
 {
   name:"Fotolithografie", in:"Lack-Wafer + Fotomaske + UV/EUV", out:"Belichteter (strukturierter) Lack",
-  desc:"Das Schaltungsmuster auf einer Maske (Reticle) wird durch eine Linse mit tiefem UV (193 nm) oder extremem UV (13,5 nm) auf den Lack projiziert. Belichteter Lack ändert seine Löslichkeit. Fokus und Dosis sind alles — dieser eine Schritt legt deine Transistorgröße fest.",
+  desc:"Jetzt wird das Schaltungsmuster auf den Wafer „belichtet“ — ähnlich wie früher bei einem Foto. UV-Licht scheint durch eine Maske (eine Art Schablone) auf den Lack. Wo Licht auftrifft, verändert sich der Lack. Das Bild muss perfekt scharf sein, denn hier entstehen die winzigen Bauteile.",
   chem:"Belichtungsdosis (mJ/cm²) + Fokus → latentes Bild\nAuflösung ≈ k₁·λ / NA   (kleinere λ → kleinere Strukturen)",
   fact:"EUV bei 13,5 nm entsteht, indem geschmolzene Zinn-Tröpfchen 50.000-mal pro Sekunde mit einem Laser beschossen werden — jede Anlage kostet >150 Mio. $.",
   build(g,api){
-    const w=wafer(0x222,2,.1); w.position.y=1; g.add(w);
+    const w=wafer(0x222222,2,.1); w.position.y=1; g.add(w);
     const pat=new THREE.Group(); pat.position.y=1.07; g.add(pat);
     const lines=[];
     for(let i=-8;i<=8;i++){ const m=new THREE.Mesh(new THREE.BoxGeometry(3,.02,.05),
@@ -560,11 +562,11 @@ const STAGES = [
 },
 {
   name:"Ätzen", in:"Strukturierter Wafer + Plasma/Säure", out:"Geätzte 3D-Struktur",
-  desc:"Wo der Lack entfernt wurde, wird der Wafer weggeätzt — das Muster wird in das Oxid/Silizium übertragen. Nassätzen (Säuren) ist isotrop und unterätzt; trockenes Plasma (reaktives Ionenätzen) ist anisotrop und schneidet die senkrechten Wände, die für winzige Strukturen nötig sind.",
+  desc:"Mit Gas (Plasma) oder Säure wird der Wafer genau dort weggeätzt, wo der Lack das Muster freigibt — so wird das Muster in die Oberfläche „eingraviert“. Plasma ätzt schön gerade nach unten und macht scharfe Kanten. Säure frisst auch zur Seite und macht unsaubere Kanten.",
   chem:"Trocken (RIE):  CF₄/SF₆-Plasma → flüchtiges SiF₄↑ (senkrechte Wände)\nNass:  SiO₂ + 6 HF → H₂SiF₆ + 2 H₂O (isotrop)",
   fact:"Modernes Tiefätzen (Bosch-Prozess) wechselt zwischen Ätzen und Passivieren, um Gräben mit 50-mal tieferen als breiten Wänden zu bohren.",
   build(g,api){
-    const w=wafer(0x445,2,.4); w.position.y=1; g.add(w);
+    const w=wafer(0x444455,2,.4); w.position.y=1; g.add(w);
     const trenches=new THREE.Group(); g.add(trenches);
     const tr=[];
     for(let i=-5;i<=5;i++){ const t=new THREE.Mesh(new THREE.BoxGeometry(3,.01,.12),M(0x05080f));
@@ -593,7 +595,7 @@ const STAGES = [
 },
 {
   name:"Ionenimplantation", in:"Geätzter Wafer + Dotier-Ionen", out:"Dotierte Übergänge (Source/Drain, Wannen)",
-  desc:"Dotieratome — Bor für p-Typ, Phosphor/Arsen für n-Typ — werden ionisiert, auf hohe Energie beschleunigt und ins Silizium geschossen, um seine Leitfähigkeit einzustellen. Die Dosis bestimmt die Konzentration, die Energie die Tiefe. Ein späteres Ausheilen (Annealing) repariert das Gitter und aktiviert die Dotanden.",
+  desc:"Reines Silizium leitet Strom kaum. Damit es das gezielt tut, werden fremde Atome (z. B. Bor oder Phosphor) mit hohem Tempo ins Silizium hineingeschossen — das nennt man Dotieren. Mehr Atome = mehr Leitfähigkeit, mehr Tempo = tiefer. Erst dadurch wird Silizium zum Halbleiter — dem Herzstück jedes Transistors.",
   chem:"B⁺ → p-Typ (Löcher)   ·   P⁺ / As⁺ → n-Typ (Elektronen)\nTiefe ∝ Ionenenergie (keV) · Dosis = Ionen/cm²",
   fact:"Die hier gebauten p-n-Übergänge sind das Herz jedes Transistors und jeder Diode — Dotierung macht aus Silizium erst einen *Halb*leiter.",
   build(g,api){
@@ -630,11 +632,11 @@ const STAGES = [
 },
 {
   name:"Abscheidung (CVD / PVD)", in:"Dotierter Wafer + Prozessgase/Metall", out:"Neue Leiter-/Isolatorschicht",
-  desc:"Obenauf werden Dünnschichten aufgebaut: Isolatoren und die Metallverdrahtung, die die Transistoren verbindet. Chemische Gasphasenabscheidung (CVD) lässt Schichten aus reagierenden Gasen wachsen; physikalische (PVD, Sputtern) schießt Metallatome auf den Wafer. Kupfer und Wolfram bilden die Leitbahnen.",
+  desc:"Jetzt werden neue, hauchdünne Schichten aufgetragen: isolierende Schichten und vor allem die Metalldrähte (meist aus Kupfer), die alle Bauteile miteinander verbinden — wie die Kabel in einem Haus, nur winzig klein. Die Schichten wachsen entweder aus einem Gas oder werden als Metall aufgestäubt.",
   chem:"CVD:  SiH₄ → Si + 2 H₂  ·  WF₆ + 3 H₂ → W + 6 HF\nPVD (Sputtern): Ar⁺ schlägt Cu/Al-Atome auf den Wafer",
   fact:"Ein moderner Chip stapelt 15+ Metalllagen an Leitbahnen — abgewickelt kann die Kupferverdrahtung eines Chips zig Kilometer lang sein.",
   build(g,api){
-    const w=wafer(0x556,2,.3); w.position.y=1; g.add(w);
+    const w=wafer(0x555566,2,.3); w.position.y=1; g.add(w);
     const film=new THREE.Mesh(new THREE.CylinderGeometry(2,2,.02,80),M(0xcc8844,{metalness:1,roughness:.25}));
     film.position.y=1.16; film.scale.y=0.01; g.add(film);
     const src=glow(0xffaa66,1.5); src.position.set(0,2.4,0); g.add(src);
@@ -659,7 +661,7 @@ const STAGES = [
 },
 {
   name:"CMP — Planarisierung", in:"Holpriger Mehrschicht-Wafer", out:"Ebene Fläche für die nächste Schicht",
-  desc:"Nach der Abscheidung ist die Oberfläche hügelig. Chemisch-mechanische Planarisierung schleift sie mit Polierpad und chemisch aktivem Slurry wieder spiegeleben, damit die nächste Lithografie-Lage scharf bleibt. Poliere genau bis zum Ziel — Überschuss entfernt benötigte Verdrahtung.",
+  desc:"Nach dem Auftragen ist die Oberfläche hubbelig. Mit einer Art Schleifteller wird sie wieder spiegeleben geschliffen. Nur so lässt sich die nächste Schicht sauber darauf bauen. Schleifst du zu viel weg, zerstörst du die Drähte darunter.",
   chem:"Kombiniert chemisches Ätzen + mechanischer Abrieb (Slurry)\nZiel: globale Ebenheit auf Nanometer vor der nächsten Schicht",
   fact:"Das Stapeln dutzender Schichten ist nur möglich, weil CMP die Oberfläche nach jeder einzelnen wieder eben macht.",
   build(g,api){
@@ -667,7 +669,7 @@ const STAGES = [
     const pos=geo.attributes.position; const base=[];
     for(let i=0;i<pos.count;i++){ const h=rnd(0,.35); base.push(h); pos.setY(i,h);}
     const surf=new THREE.Mesh(geo,M(0x9988cc,{metalness:.7,roughness:.3,flatShading:true})); surf.position.y=1.2; g.add(surf);
-    const pad=new THREE.Mesh(new THREE.CylinderGeometry(2.4,2.4,.25,48),M(0x223,{roughness:1})); pad.position.y=2; g.add(pad);
+    const pad=new THREE.Mesh(new THREE.CylinderGeometry(2.4,2.4,.25,48),M(0x222233,{roughness:1})); pad.position.y=2; g.add(pad);
     let flat=0;
     api.addUpdater(dt=>{ pad.rotation.y+=dt*2; surf.rotation.y+=dt*.6; });
     api.widget(`<button id="cmp">Eben polieren (klicken für Fortschritt)</button>
@@ -689,12 +691,12 @@ const STAGES = [
 },
 {
   name:"Schichtstapel wiederholen (BEOL)", in:"Eine fertige Schicht", out:"Vollständige Mehrlagen-Verdrahtung",
-  desc:"Ein Chip ist nicht eine Schicht — es sind dutzende. Oxidation → Litho → Ätzen → Implantieren/Abscheiden → CMP wiederholt sich immer wieder, um Transistoren und die verbindende Metallverdrahtung zu stapeln (das „Back End of Line“). Jede zusätzliche Schicht vervielfacht die Komplexität und das Risiko eines tödlichen Defekts.",
+  desc:"Ein Chip besteht nicht aus einer Schicht, sondern aus dutzenden übereinander! Die Schritte Belichten, Ätzen, Auftragen und Schleifen wiederholen sich immer wieder, um alle Bauteile und Leitungen zu stapeln. Jede neue Schicht macht den Chip leistungsfähiger — aber auch fehleranfälliger.",
   chem:"N × (Dielektrikum abscheiden → Litho → Vias ätzen → Metall füllen → CMP)\nMehr Schichten = mehr Funktion, geringere Ausbeute je Maske",
   fact:"Ein hochmoderner Logikchip kann 80–100+ separate Maskenebenen und Monate Bearbeitung pro Wafer erfordern.",
   build(g,api){
     const layers=new THREE.Group(); layers.position.y=.6; g.add(layers);
-    const colors=[0x445,0x668,0x886,0x8a8,0xa88,0x88c,0xc8a];
+    const colors=[0x444455,0x666688,0x888866,0x88aa88,0xaa8888,0x8888cc,0xcc88aa];
     let built=1;
     function rebuild(n){ while(layers.children.length) layers.remove(layers.children[0]);
       for(let i=0;i<n;i++){ const m=wafer(colors[i%colors.length],2,.12); m.position.y=i*0.16; layers.add(m);
@@ -715,16 +717,16 @@ const STAGES = [
 },
 {
   name:"Wafer-Test (Probe / EWS)", in:"Fertiger Wafer", out:"Wafer-Karte mit guten/schlechten Dies",
-  desc:"Vor dem Zerschneiden wird jeder Die elektrisch direkt auf dem Wafer getestet: Eine Probekarte setzt hunderte Nadeln auf die Kontaktpads. Fehlerhafte Dies werden markiert oder protokolliert. Diese „Wafer-Sort“-Ausbeute ist das Zeugnis der Fab — und die Randchips fallen am häufigsten durch.",
+  desc:"Bevor der Wafer zerteilt wird, prüft eine Maschine mit feinen Nadeln jeden einzelnen Chip auf dem Wafer elektrisch. Funktionierende werden grün, kaputte rot markiert. Am Rand gehen meist mehr kaputt. Wie viele heil sind, nennt man die „Ausbeute“ — sie ist das Zeugnis der Fabrik.",
   chem:"Elektrische Testvektoren je Die bei Takt/Spannung\nAusbeute = gute Dies / alle Dies (Defekte häufen sich am Rand)",
   fact:"Schon wenige Staubpartikel pro Wafer können Dies töten; deshalb sind Fabs sauberer als ein OP — Reinraum der Klasse 1.",
   build(g,api){
     const w=wafer(0x223a55,2.2,.1); w.position.y=1; g.add(w);
     const dies=[]; const grp=new THREE.Group(); grp.position.y=1.06; g.add(grp);
     for(let x=-4;x<=4;x++)for(let y=-4;y<=4;y++){ const r=Math.hypot(x,y); if(r>4.4) continue;
-      const d=new THREE.Mesh(new THREE.BoxGeometry(.4,.04,.4),M(0x335,{emissive:0x112233}));
+      const d=new THREE.Mesh(new THREE.BoxGeometry(.4,.04,.4),M(0x333355,{emissive:0x112233}));
       d.position.set(x*.44,0,y*.44); d.userData={r,tested:false}; grp.add(d); dies.push(d);}
-    const probe=new THREE.Mesh(new THREE.CylinderGeometry(.05,.02,.6,8),M(0xccc,{metalness:1})); probe.position.y=1.5; g.add(probe);
+    const probe=new THREE.Mesh(new THREE.CylinderGeometry(.05,.02,.6,8),M(0xcccccc,{metalness:1})); probe.position.y=1.5; g.add(probe);
     let i=0, good=0, total=dies.length, testing=false;
     api.addUpdater(dt=>{ w.rotation.y+=dt*.02;
       if(testing && i<dies.length){ const d=dies[i]; probe.position.set(d.position.x,1.4,d.position.z+grp.position.z);
@@ -745,12 +747,12 @@ const STAGES = [
 },
 {
   name:"Vereinzeln (Dicing)", in:"Getesteter Wafer", out:"Einzelne Silizium-Dies",
-  desc:"Der Wafer wird auf Klebeband montiert, und ein Diamantblatt (oder Laser) schneidet entlang der Straßen zwischen den Dies, wodurch er in hunderte einzelne Chips zerfällt. Nur die Dies, die den Test bestanden haben, kommen weiter. Absplittern oder Risse an der Schnittlinie verschrotten gute Dies.",
+  desc:"Jetzt wird der Wafer mit einer Diamantsäge (oder einem Laser) in seine vielen einzelnen Chips zerschnitten. Geschnitten wird nur entlang der schmalen Linien zwischen den Chips. Nur die Chips, die den Test bestanden haben, kommen weiter.",
   chem:"Mechanische Trennsäge oder Stealth-Laser-Dicing\nNur die Trennstraßen schneiden; gute Dies intakt halten",
   fact:"Modernes „Stealth-Dicing“ fokussiert einen Laser *im Inneren* des Wafers, um ihn sauber entlang der Linien zu brechen — fast ohne Schnittverlust oder Bruchstaub.",
   build(g,api){
     const w=wafer(0x2a4060,2.1,.08); w.position.y=1; g.add(w);
-    const blade=new THREE.Mesh(new THREE.CylinderGeometry(.5,.5,.03,32),M(0xddd,{metalness:1,roughness:.2}));
+    const blade=new THREE.Mesh(new THREE.CylinderGeometry(.5,.5,.03,32),M(0xdddddd,{metalness:1,roughness:.2}));
     blade.rotation.z=Math.PI/2; blade.position.set(-3,1.3,0); g.add(blade);
     let dicing=false, dir=0, cuts=0;
     const slits=new THREE.Group(); slits.position.y=1.05; g.add(slits);
@@ -772,7 +774,7 @@ const STAGES = [
 },
 {
   name:"Gehäusung (Packaging)", in:"Nackter Die", out:"Gebondetes, vergossenes Gehäuse",
-  desc:"Ein guter Die wird auf ein Substrat/Leadframe geklebt, seine Pads werden nach außen verbunden — durch haardünne Gold-/Kupfer-Bonddrähte oder Flip-Chip-Lothöcker — und dann in Epoxidharz vergossen. Das Gehäuse führt Strom, Signale und Wärme nach außen.",
+  desc:"Der winzige Chip ist sehr empfindlich. Deshalb wird er auf einen Träger geklebt, mit hauchdünnen Golddrähtchen mit den Anschlüssen verbunden und dann in festes Kunstharz eingegossen — wie ein Bonbon im Mantel. Das Gehäuse schützt ihn und leitet Strom, Signale und Wärme nach außen.",
   chem:"Die-Befestigung → Drahtbonden (Au/Cu) oder Flip-Chip (Lothöcker)\nVerguss mit Epoxid-Formmasse; Bälle/Beine für die Platine",
   fact:"Modernes 2,5D/3D-Packaging stapelt heute mehrere Dies auf einem Silizium-Interposer — Gehäusung ist so entscheidend geworden wie die Transistoren selbst.",
   build(g,api){
@@ -781,7 +783,7 @@ const STAGES = [
     const wires=new THREE.Group(); g.add(wires); let bonds=0;
     let molded=false;
     const mold=new THREE.Mesh(new THREE.BoxGeometry(2.6,.6,2.6),
-      new THREE.MeshStandardMaterial({color:0x111,roughness:.5,transparent:true,opacity:0})); mold.position.y=1.3; g.add(mold);
+      new THREE.MeshStandardMaterial({color:0x111111,roughness:.5,transparent:true,opacity:0})); mold.position.y=1.3; g.add(mold);
     api.addUpdater(dt=>{ wires.rotation.y; });
     api.widget(`<button id="bond">Bonddraht hinzufügen (×8)</button>
       <span class="readout">Bonds: <b id="bc">0</b>/8</span>
@@ -802,13 +804,13 @@ const STAGES = [
 },
 {
   name:"Fertiger Chip — Test & Versand", in:"Verpacktes Bauteil", out:"Qualifiziertes Produkt",
-  desc:"Der Endtest betreibt den verpackten Chip bei Takt über Spannung und Temperatur, dann wird er eingebrannt, beschriftet und nach Leistung sortiert. Aus wenigen Gramm Quarz hast du einen funktionierenden integrierten Schaltkreis gebaut — durch ~18 derselben Schritte, die eine echte Fab fährt, nur tausendfach.",
+  desc:"Zum Schluss wird der fertige Chip noch einmal komplett getestet, beschriftet und nach Leistung sortiert. Geschafft: Aus ein paar Gramm Sand ist ein funktionierender Computerchip geworden — über dieselben rund 18 Schritte, die auch echte Fabriken gehen, nur tausendfach.",
   chem:"End-/ATE-Test → Burn-in → Laserbeschriftung → Geschwindigkeits-Binning\nQualifizierte, rückverfolgbare Teile versenden",
   fact:"Die Reise, die du gerade gefahren bist, dauert in einer echten Fab 3+ Monate und 1000+ Prozessschritte pro Wafer — für eine einzige Chip-Generation.",
   build(g,api){
-    const chip=new THREE.Mesh(new THREE.BoxGeometry(2.2,.4,2.2),M(0x111,{roughness:.4,metalness:.3})); chip.position.y=1.4; g.add(chip);
+    const chip=new THREE.Mesh(new THREE.BoxGeometry(2.2,.4,2.2),M(0x111111,{roughness:.4,metalness:.3})); chip.position.y=1.4; g.add(chip);
     const dieTop=new THREE.Mesh(new THREE.BoxGeometry(1.2,.06,1.2),M(0x2a4a7a,{metalness:.8,roughness:.2})); dieTop.position.y=1.63; g.add(chip.add(dieTop)||dieTop);
-    for(let i=0;i<10;i++){ const a=i/10*6.28; const leg=new THREE.Mesh(new THREE.BoxGeometry(.1,.1,.4),M(0xccc,{metalness:1}));
+    for(let i=0;i<10;i++){ const a=i/10*6.28; const leg=new THREE.Mesh(new THREE.BoxGeometry(.1,.1,.4),M(0xcccccc,{metalness:1}));
       leg.position.set(Math.cos(a)*1.3,1.2,Math.sin(a)*1.3); leg.lookAt(0,1.2,0); g.add(leg);}
     const halo=glow(0x34e0c0,2); halo.position.set(0,2.4,0); g.add(halo);
     api.addUpdater(dt=>{ chip.rotation.y+=dt*.5; halo.intensity=2+Math.sin(performance.now()*.003)*1;});
