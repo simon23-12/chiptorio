@@ -154,11 +154,11 @@
       <div class="go">▸ Lernmodus starten</div>
     </div>
     <div class="card factory" id="btn-factory">
-      <span class="badge-soon">BALD</span>
+      <span class="badge-soon">NEU</span>
       <div class="ic">🏭</div>
       <h3>Fabrik bauen</h3>
-      <p>Baue eine Chipfabrik im Fließband-Stil: Rohstoffe richtig kombinieren und dabei Energie, Wasser und Material im Blick behalten.</p>
-      <div class="go">▸ In Entwicklung</div>
+      <p>Baue eine Chipfabrik im Fließband-Stil: Förderbänder legen, Maschinen verketten und dabei Energie, Wasser und Rohstoffe im Blick behalten.</p>
+      <div class="go">▸ Fabrik starten</div>
     </div>
   </div>
   <div class="menu-foot">◆ LMG TECH</div>
@@ -975,7 +975,7 @@ function show(id){ SCREENS.forEach(s=>el(s).classList.add('hide')); if(id) el(id
 function resetGame(){ state.purity=5; state.yield=100; state.stage=0; loadedIndex=0; refreshMeters(); }
 
 el('btn-learn').onclick    = ()=> show('overlay');
-el('btn-factory').onclick  = ()=> show('coming');
+el('btn-factory').onclick  = ()=> location.href='factory.html';
 el('coming-back').onclick  = ()=> show('menu');
 el('coming-back2').onclick = ()=> show('menu');
 el('intro-back').onclick   = ()=> show('menu');

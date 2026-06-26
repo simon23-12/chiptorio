@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Chiptorio — Fabrik bauen</title>
+<style>
+  :root{
+    --bg:#0e1626; --panel:rgba(12,18,30,.9); --line:#1d2c44;
+    --txt:#dce6f5; --dim:#8095b0; --acc:#34e0c0; --acc2:#5aa9ff;
+    --warn:#ffb454; --bad:#ff5d6c; --good:#46d97e; --orange:#f5931a;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font-family:var(--sans);user-select:none}
+  canvas{display:block;position:fixed;inset:0;z-index:1}
+  #ui{position:fixed;inset:0;z-index:10;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between}
+
+  /* top bar */
+  #top{pointer-events:auto;display:flex;align-items:center;gap:10px;padding:10px 14px;flex-wrap:wrap;
+    background:linear-gradient(#0e1626ee,#0e162600)}
+  .stat{font-family:var(--mono);font-size:13px;background:#0c1830cc;border:1px solid var(--line);
+    border-radius:9px;padding:6px 12px;display:flex;gap:6px;align-items:center}
+  .stat b{font-weight:700}
+  .stat .lbl{color:var(--dim);font-size:10px;letter-spacing:.5px}
+  #back{pointer-events:auto;font-family:var(--sans);font-weight:600;font-size:12px;cursor:pointer;
+    border:1px solid #33486e;background:transparent;color:var(--dim);padding:7px 12px;border-radius:9px}
+  #back:hover{background:#16223a;color:var(--txt)}
+  #title{font-family:var(--mono);font-weight:700;letter-spacing:2px;color:var(--orange);font-size:14px;margin-right:4px}
+
+  /* supplies panel (right) */
+  #supplies{position:fixed;top:94px;right:12px;z-index:10;pointer-events:auto;width:212px;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;backdrop-filter:blur(12px);
+    font-size:11px;max-height:74vh;overflow:auto}
+  #supplies h4{margin:0 0 6px;font-size:11px;color:var(--dim);letter-spacing:1px;display:flex;justify-content:space-between;align-items:center}
+  .sup{display:flex;justify-content:space-between;align-items:center;padding:2px 0;font-family:var(--mono)}
+  .sup .nm{color:var(--txt)} .sup .st{color:var(--good)} .sup .st.low{color:var(--bad)}
+  .auto{display:flex;align-items:center;gap:6px;margin:6px 0;font-size:11px;color:var(--dim)}
+  .auto input{accent-color:var(--acc)}
+
+  /* selected-tool info (left) */
+  #info{position:fixed;top:94px;left:12px;z-index:10;pointer-events:none;width:248px;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:11px 13px;backdrop-filter:blur(12px);font-size:12px}
+  #info h3{margin:0 0 3px;font-size:15px} #info .cost{font-family:var(--mono);color:var(--orange);font-size:11px}
+  #info p{margin:6px 0 0;color:var(--dim);line-height:1.45;font-size:11.5px}
+  #info .recipe{font-family:var(--mono);font-size:11px;color:var(--acc2);margin-top:6px;white-space:pre-wrap;line-height:1.5}
+
+  /* hotbar (bottom) */
+  #hotbar{pointer-events:auto;display:flex;gap:6px;justify-content:center;flex-wrap:wrap;padding:10px;
+    background:linear-gradient(#0e162600,#0e1626ee)}
+  .tool{cursor:pointer;width:78px;background:#0c1830;border:1px solid #24385c;border-radius:10px;
+    padding:7px 4px 5px;text-align:center;transition:.12s;position:relative}
+  .tool:hover{border-color:var(--acc);transform:translateY(-2px)}
+  .tool.sel{border-color:var(--acc);background:#0c2b27;box-shadow:0 0 14px #34e0c055}
+  .tool.del.sel{border-color:var(--bad);background:#2b0c10;box-shadow:0 0 14px #ff5d6c55}
+  .tool .ic{font-size:20px;line-height:1.1}
+  .tool .nm{font-size:9.5px;color:var(--txt);margin-top:1px;line-height:1.1}
+  .tool .ky{position:absolute;top:3px;left:5px;font-family:var(--mono);font-size:8px;color:var(--dim)}
+  .tool .cst{font-family:var(--mono);font-size:8.5px;color:var(--orange)}
+
+  /* overlay intro */
+  #intro{position:fixed;inset:0;z-index:30;pointer-events:auto;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;padding:24px;
+    background:radial-gradient(circle at 50% 40%,rgba(16,26,46,.92),rgba(6,10,18,.97))}
+  #intro h1{font-size:34px;margin:0 0 4px;background:linear-gradient(90deg,#5aa9ff,#f5931a);
+    -webkit-background-clip:text;background-clip:text;color:transparent;font-weight:800}
+  #intro .chain{font-family:var(--mono);font-size:12.5px;color:var(--txt);line-height:1.9;text-align:left;
+    background:#0c1830;border:1px solid var(--line);border-radius:12px;padding:14px 18px;margin:14px 0;max-width:640px}
+  #intro .ctrl{color:var(--dim);font-size:12.5px;max-width:600px;line-height:1.6}
+  button.big{font-family:var(--sans);font-weight:700;font-size:15px;cursor:pointer;border:1px solid var(--acc);
+    background:#0c2b27;color:var(--acc);padding:12px 30px;border-radius:10px;margin-top:10px}
+  button.big:hover{background:var(--acc);color:#04231f}
+  .hide{display:none!important}
+  kbd{font-family:var(--mono);background:#16223a;border:1px solid #2a3a5a;border-radius:4px;padding:1px 6px;font-size:11px}
+  #toast{position:fixed;top:54px;left:50%;transform:translateX(-50%);z-index:40;display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none}
+  .tmsg{background:var(--panel);border:1px solid var(--warn);color:var(--txt);padding:8px 16px;border-radius:9px;font-size:12.5px;box-shadow:0 8px 24px #0008}
+  #tip{position:fixed;z-index:20;pointer-events:none;background:#06101fee;border:1px solid var(--line);
+    border-radius:8px;padding:6px 9px;font-size:11px;font-family:var(--mono);display:none;max-width:220px}
+  #tip .s{color:var(--dim)}
+</style>
+</head>
+<body>
+<div id="ui">
+  <div id="top">
+    <button id="back">← Hauptmenü</button>
+    <span id="title">CHIPTORIO · FABRIK</span>
+    <div class="stat"><span class="lbl">GELD</span><b id="s-money" style="color:var(--good)">—</b></div>
+    <div class="stat"><span class="lbl">⚡ STROM</span><b id="s-power">—</b></div>
+    <div class="stat"><span class="lbl">💧 WASSER</span><b id="s-water">—</b></div>
+    <div class="stat"><span class="lbl">🔲 CHIPS</span><b id="s-chips" style="color:var(--acc)">0</b></div>
+    <div class="stat"><span class="lbl">💵 /min</span><b id="s-rate">0</b></div>
+  </div>
+  <div id="hotbar"></div>
+</div>
+
+<div id="info"><h3>—</h3></div>
+
+<div id="supplies">
+  <h4><span>VORRÄTE</span><span id="sup-cost" style="color:var(--orange)"></span></h4>
+  <label class="auto"><input type="checkbox" id="autobuy" checked> Auto-Nachschub kaufen</label>
+  <div id="sup-list"></div>
+</div>
+
+<div id="tip"></div>
+<div id="toast"></div>
+
+<div id="intro">
+  <h1>🏭 Fabrik bauen</h1>
+  <p style="color:var(--dim);max-width:560px;margin:0">Baue die Lieferkette vom Quarzsand bis zum Chip. Verbinde die Maschinen mit Förderbändern und halte Strom, Wasser, Rohstoffe und Geld im Gleichgewicht.</p>
+  <div class="chain" id="chaintext"></div>
+  <p class="ctrl"><b>Steuerung:</b> &nbsp;<kbd>Linksklick</kbd> bauen · <kbd>Ziehen</kbd> Kamera drehen · Förderband/Abriss <kbd>ziehen</kbd> zum Verlegen · <kbd>R</kbd> drehen · <kbd>Rechtsklick</kbd> abreißen · <kbd>1</kbd>–<kbd>0</kbd> Werkzeug · <kbd>Mausrad</kbd> zoomen</p>
+  <button class="big" id="startbtn">▶ Fabrik starten</button>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+}}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* ===================== GRUND-DATEN ===================== */
+const N = 18, S = 1, HALF = (N-1)/2;
+const DIRS = [[0,-1],[1,0],[0,1],[-1,0]]; // N,E,S,W
+const ROT  = [Math.PI, Math.PI/2, 0, -Math.PI/2]; // Pfeil zeigt +z (Standard)
+
+// Items auf Bändern
+const ITEMS = {
+  sand:  {name:"Quarzsand", col:0xd9c08a},
+  coal:  {name:"Kohle", col:0x2f2f2f},
+  mgsi:  {name:"Rohsilizium", col:0x8a8f98},
+  egsi:  {name:"Reinst-Silizium", col:0xc6d2e4},
+  ingot: {name:"Kristall-Barren", col:0xaeb9cc},
+  wafer: {name:"Roh-Wafer", col:0x9fb3c9},
+  pwafer:{name:"Struktur-Wafer", col:0xb58fd6},
+  chip:  {name:"Chip", col:0xffd24a},
+};
+
+// Vorräte (mit Geld gekauft)
+const SUP = {
+  hcl:    {name:"Chlorwasserstoff (HCl)", price:2,  stock:80},
+  h2:     {name:"Wasserstoff (H₂)", price:2,  stock:80},
+  o2:     {name:"Sauerstoff (O₂)", price:1.5,stock:80},
+  ar:     {name:"Argon (Ar)", price:2,  stock:80},
+  n2:     {name:"Stickstoff (N₂)", price:1,  stock:80},
+  f2:     {name:"Fluor-Gase", price:3,  stock:80},
+  resist: {name:"Photoresist", price:4,  stock:80},
+  boron:  {name:"Bor", price:3,  stock:80},
+  phos:   {name:"Phosphor", price:3,  stock:80},
+  arsenic:{name:"Arsen", price:4,  stock:80},
+  copper: {name:"Kupfer", price:2.5,stock:80},
+  epoxy:  {name:"Epoxidharz", price:3,  stock:80},
+};
+
+// Gebäude-Definitionen
+const DEF = {
+  belt:      {name:"Förderband", ic:"➤", cost:5,   col:0x2b3a52, cat:"Logistik"},
+  sandmine:  {name:"Sandgrube", ic:"⛏️", cost:80,  col:0x6b5a3a, powerUse:3,  cat:"Rohstoff"},
+  coalmine:  {name:"Kohlemine", ic:"⚫", cost:90,  col:0x3a3a3a, powerUse:3,  cat:"Rohstoff"},
+  solar:     {name:"Solarkraftwerk", ic:"☀️", cost:140, col:0x2e6da4, powerGen:25, cat:"Versorgung"},
+  pump:      {name:"Wasserpumpe", ic:"💧", cost:120, col:0x2a8fb0, powerUse:6, waterGen:25, cat:"Versorgung"},
+  furnace:   {name:"Lichtbogenofen", ic:"🔥", cost:220, col:0xc0532a, powerUse:26, cat:"Maschine"},
+  siemens:   {name:"Siemens-Reaktor", ic:"⚗️", cost:260, col:0x4a7a55, powerUse:14, cat:"Maschine"},
+  crystal:   {name:"Kristallzieher", ic:"💎", cost:320, col:0x7a5aa0, powerUse:18, cat:"Maschine"},
+  waferplant:{name:"Wafer-Werk", ic:"🥞", cost:300, col:0x5a7fb0, powerUse:8, waterUse:12, cat:"Maschine"},
+  fab:       {name:"Frontend-Fab", ic:"🔬", cost:460, col:0x8a4fa0, powerUse:22, waterUse:16, cat:"Maschine"},
+  packaging: {name:"Packaging", ic:"📦", cost:280, col:0xb08030, powerUse:8, cat:"Maschine"},
+  seller:    {name:"Versand", ic:"🚚", cost:100, col:0x3a9a5a, cat:"Logistik"},
+};
+
+// Quellen (kein Input)
+const SOURCES = {
+  sandmine: {out:"sand", time:1.6},
+  coalmine: {out:"coal", time:1.8},
+};
+
+// Rezepte: in = Belt-Items, sup = Vorräte, out = Belt-Item
+const RECIPES = {
+  furnace:   {in:{sand:1, coal:1}, sup:{}, out:"mgsi",  time:2.6},
+  siemens:   {in:{mgsi:1}, sup:{hcl:1, h2:1}, out:"egsi", time:3.0},
+  crystal:   {in:{egsi:1}, sup:{ar:1}, out:"ingot", time:3.4},
+  waferplant:{in:{ingot:1}, sup:{}, out:"wafer", time:2.6, outCount:2},
+  fab:       {in:{wafer:1}, sup:{o2:1, resist:1, f2:1, n2:1, boron:1, phos:1, arsenic:1, copper:1}, out:"pwafer", time:4.2},
+  packaging: {in:{pwafer:1}, sup:{epoxy:1}, out:"chip", time:2.6},
+};
+const CHIP_PRICE = 150;
+const TOOLS = ["belt","sandmine","coalmine","solar","pump","furnace","siemens","crystal","waferplant","fab","packaging","seller","delete"];
+const KEYMAP = {"1":"belt","2":"sandmine","3":"coalmine","4":"solar","5":"pump","6":"furnace","7":"siemens","8":"crystal","9":"waferplant","0":"fab","p":"packaging","v":"seller","x":"delete"};
+
+const game = { money:3000, chips:0, powerGen:0, powerDemand:0, waterGen:0, waterDemand:0, powerOK:true, waterOK:true, rate:0, soldWindow:[] };
+
+/* ===================== THREE SETUP ===================== */
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0e1626);
+scene.fog = new THREE.Fog(0x0e1626, 22, 48);
+const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.1, 200);
+camera.position.set(0, 16, 15);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = .09;
+controls.minDistance = 6; controls.maxDistance = 38; controls.maxPolarAngle = Math.PI*0.46;
+controls.target.set(0,0,0);
+
+scene.add(new THREE.AmbientLight(0xb4c6e4, .7));
+scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x1a2438, 1.0));
+const key = new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(10,16,8); scene.add(key);
+const fill = new THREE.DirectionalLight(0xcfe0ff, .7); fill.position.set(-8,8,-6); scene.add(fill);
+
+// Boden + Gitter
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(N*S, N*S),
+  new THREE.MeshStandardMaterial({color:0x12203a, roughness:.95}));
+ground.rotation.x = -Math.PI/2; ground.position.y = 0; scene.add(ground);
+const grid = new THREE.GridHelper(N*S, N, 0x33507e, 0x1d3052);
+grid.position.y = 0.01; grid.material.transparent=true; grid.material.opacity=.5; scene.add(grid);
+
+addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
+
+/* ===================== HELFER ===================== */
+const mat = (c,o={})=> new THREE.MeshStandardMaterial({color:c, metalness:.25, roughness:.6, ...o});
+const k = (x,z)=> x+","+z;
+const inBounds = (x,z)=> x>=0&&x<N&&z>=0&&z<N;
+const tileToWorld = (x,z)=> [ (x-HALF)*S, (z-HALF)*S ];
+function dirFromDelta(dx,dz){ if(dx===1)return 1; if(dx===-1)return 3; if(dz===1)return 2; if(dz===-1)return 0; return -1; }
+
+const grid_ = new Map();      // key -> building
+const buildings = [];
+let items = [];
+
+/* ===================== GEBÄUDE-MESH ===================== */
+function makeMesh(kind,dir){
+  const g = new THREE.Group(); const d = DEF[kind];
+  if(kind==="belt"){
+    const p = new THREE.Mesh(new THREE.BoxGeometry(.92,.08,.92), mat(0x2b3a52,{roughness:.8}));
+    p.position.y=.05; g.add(p);
+    const a = new THREE.Mesh(new THREE.ConeGeometry(.17,.34,4), mat(0x66d0ff,{emissive:0x123244,emissiveIntensity:1}));
+    a.rotation.x=Math.PI/2; a.position.set(0,.13,.06); g.add(a); g.userData.arrow=a;
+  } else if(kind==="belt"){ }
+  else {
+    const body = new THREE.Mesh(new THREE.BoxGeometry(.84,.55,.84), mat(d.col,{roughness:.55}));
+    body.position.y=.3; g.add(body);
+    // Akzentdach
+    const top = new THREE.Mesh(new THREE.BoxGeometry(.6,.08,.6), mat(d.col).clone());
+    top.material = mat(0xffffff,{transparent:true,opacity:.08}); top.position.y=.6; g.add(top);
+    const ind = new THREE.Mesh(new THREE.SphereGeometry(.1,12,12), mat(0x44ff88,{emissive:0x115522,emissiveIntensity:1}));
+    ind.position.set(0,.74,0); g.add(ind); g.userData.ind=ind;
+    if(RECIPES[kind] || SOURCES[kind]){
+      const a = new THREE.Mesh(new THREE.ConeGeometry(.1,.22,4), mat(0xffffff,{emissive:0x333333}));
+      a.rotation.x=Math.PI/2; a.position.set(0,.3,.5); g.add(a);
+    }
+  }
+  g.rotation.y = ROT[dir];
+  return g;
+}
+
+/* ===================== ITEMS ===================== */
+const SPEED = 1.15, SPACING = 0.34;
+const itemGeo = new THREE.BoxGeometry(.26,.26,.26);
+function makeItem(type,x,z,prog){
+  const m = new THREE.Mesh(itemGeo, mat(ITEMS[type].col,{metalness:.4,roughness:.4,
+    emissive:ITEMS[type].col, emissiveIntensity:.12}));
+  scene.add(m);
+  const it = {type,x,z,prog,mesh:m,_dead:false};
+  items.push(it); placeItemMesh(it); return it;
+}
+function placeItemMesh(it){
+  const b = grid_.get(k(it.x,it.z)); const d = b&&b.kind==="belt"?DIRS[b.dir]:[0,1];
+  const [wx,wz]=tileToWorld(it.x,it.z);
+  it.mesh.position.set(wx+d[0]*(it.prog-0.5)*S, 0.2, wz+d[1]*(it.prog-0.5)*S);
+}
+function occupiedStart(x,z){ for(const it of items){ if(!it._dead&&it.x===x&&it.z===z&&it.prog<SPACING) return true; } return false; }
+function machineAccepts(b,type){ const r=RECIPES[b.kind]; return r && r.in[type]!=null && (b.buf[type]||0) < r.in[type]*4; }
+
+function spawnFront(b,type){
+  const d=DIRS[b.dir]; const fx=b.x+d[0], fz=b.z+d[1];
+  const nb = grid_.get(k(fx,fz)); if(!nb && !inBounds(fx,fz)) return false; if(!nb) return false;
+  if(nb.kind==="belt"){ if(occupiedStart(fx,fz)) return false; makeItem(type,fx,fz,0.05); return true; }
+  if(RECIPES[nb.kind] && machineAccepts(nb,type)){ nb.buf[type]=(nb.buf[type]||0)+1; return true; }
+  if(nb.kind==="seller" && type==="chip"){ sellChip(); return true; }
+  return false;
+}
+function sellChip(){ game.money += CHIP_PRICE; game.chips++; game.soldWindow.push(performance.now()); }
+
+function moveItems(dt){
+  items.sort((a,b)=> b.prog - a.prog);
+  for(const it of items){
+    if(it._dead) continue;
+    const b = grid_.get(k(it.x,it.z));
+    if(!b || b.kind!=="belt"){ it._dead=true; scene.remove(it.mesh); continue; }
+    const d = DIRS[b.dir];
+    let cap = 1.0;
+    for(const o of items){ if(o!==it && !o._dead && o.x===it.x && o.z===it.z && o.prog>it.prog) cap=Math.min(cap,o.prog-SPACING); }
+    let np = it.prog + SPEED*dt; if(np>cap) np=cap;
+    if(np>=1){
+      const nx=it.x+d[0], nz=it.z+d[1]; const nb=grid_.get(k(nx,nz));
+      if(nb && nb.kind==="belt" && !occupiedStart(nx,nz)){ it.x=nx; it.z=nz; it.prog=0.0; }
+      else if(nb && RECIPES[nb.kind] && machineAccepts(nb,it.type)){ nb.buf[it.type]=(nb.buf[it.type]||0)+1; it._dead=true; scene.remove(it.mesh); continue; }
+      else if(nb && nb.kind==="seller" && it.type==="chip"){ sellChip(); it._dead=true; scene.remove(it.mesh); continue; }
+      else it.prog=1.0;
+    } else it.prog=np;
+    placeItemMesh(it);
+  }
+  if(items.some(i=>i._dead)) items = items.filter(i=>!i._dead);
+}
+
+/* ===================== WIRTSCHAFT / TICK ===================== */
+function hasInputs(b){ const r=RECIPES[b.kind]; for(const key in r.in){ if((b.buf[key]||0) < r.in[key]) return false; } return true; }
+function hasSupplies(b){ const r=RECIPES[b.kind]; for(const key in r.sup){ if(SUP[key].stock < r.sup[key]) return false; } return true; }
+
+function computeUtilities(){
+  let pGen=0, pDem=0;
+  for(const b of buildings){ const d=DEF[b.kind]; if(d.powerGen) pGen+=d.powerGen; }
+  for(const b of buildings){ if(RECIPES[b.kind]) b.want = b.outBuf===0 && hasInputs(b) && hasSupplies(b); }
+  for(const b of buildings){
+    const d=DEF[b.kind]; if(!d.powerUse) continue;
+    if(SOURCES[b.kind]) pDem+=d.powerUse;
+    else if(b.kind==="pump") pDem+=d.powerUse;
+    else if(RECIPES[b.kind]){ if(b.want) pDem+=d.powerUse; }
+    else pDem+=d.powerUse;
+  }
+  game.powerGen=pGen; game.powerDemand=pDem; game.powerOK = pGen>=pDem;
+  let wGen=0, wDem=0;
+  for(const b of buildings){ const d=DEF[b.kind]; if(d.waterGen && game.powerOK) wGen+=d.waterGen; }
+  for(const b of buildings){ const d=DEF[b.kind]; if(RECIPES[b.kind] && d.waterUse && b.want && game.powerOK) wDem+=d.waterUse; }
+  game.waterGen=wGen; game.waterDemand=wDem; game.waterOK = wGen>=wDem;
+}
+
+function tickWork(dt){
+  for(const b of buildings){
+    if(SOURCES[b.kind]){
+      const s=SOURCES[b.kind];
+      const powered = !DEF[b.kind].powerUse || game.powerOK;
+      if(b.outBuf>0){ if(spawnFront(b,s.out)) b.outBuf=0; }
+      else if(powered){ b.t+=dt; if(b.t>=s.time){ b.t=0; if(!spawnFront(b,s.out)) b.outBuf=1; } }
+    } else if(RECIPES[b.kind]){
+      const r=RECIPES[b.kind];
+      if(b.outBuf>0){ if(spawnFront(b,b.outType)) b.outBuf--; continue; }
+      const run = b.want && game.powerOK && (!DEF[b.kind].waterUse || game.waterOK);
+      if(run){ b.t+=dt; if(b.t>=r.time){ b.t=0;
+        for(const key in r.in) b.buf[key]-=r.in[key];
+        for(const key in r.sup) SUP[key].stock-=r.sup[key];
+        b.outType=r.out; b.outBuf=r.outCount||1; } }
+    }
+  }
+}
+
+let autoTimer=0;
+function autoBuy(dt){
+  if(!document.getElementById('autobuy').checked) return;
+  autoTimer+=dt; if(autoTimer<0.5) return; autoTimer=0;
+  for(const key in SUP){ const s=SUP[key];
+    if(s.stock<25){ const batch=40, cost=batch*s.price; if(game.money>=cost){ s.stock+=batch; game.money-=cost; } }
+  }
+}
+
+/* ===================== STATUS / INDIKATOR ===================== */
+function statusOf(b){
+  if(SOURCES[b.kind]){ if(b.outBuf>0) return ["voll",0xffd24a]; return (!DEF[b.kind].powerUse||game.powerOK)?["läuft",0x44ff88]:["kein Strom",0xff5d6c]; }
+  if(RECIPES[b.kind]){
+    if(b.outBuf>0) return ["Ausgang voll",0xffd24a];
+    if(!game.powerOK) return ["kein Strom",0xff5d6c];
+    if(DEF[b.kind].waterUse && !game.waterOK) return ["kein Wasser",0xff5d6c];
+    if(!hasInputs(b)) return ["wartet auf Material",0xff5d6c];
+    if(!hasSupplies(b)) return ["Vorrat leer",0xff5d6c];
+    return ["läuft",0x44ff88];
+  }
+  if(b.kind==="seller") return ["bereit",0x44ff88];
+  if(b.kind==="solar") return ["⚡ "+DEF.solar.powerGen,0x44ff88];
+  if(b.kind==="pump") return (game.powerOK?["💧 "+DEF.pump.waterGen,0x44ff88]:["kein Strom",0xff5d6c]);
+  return ["",0x44ff88];
+}
+function updateIndicators(){
+  for(const b of buildings){ if(!b.mesh.userData.ind) continue;
+    const [,col]=statusOf(b); const m=b.mesh.userData.ind.material; m.color.setHex(col); m.emissive.setHex(col); m.emissiveIntensity=.6; }
+}
+
+/* ===================== BAUEN / ABREISSEN ===================== */
+function place(kind,x,z){
+  if(!inBounds(x,z)) return;
+  const ex = grid_.get(k(x,z));
+  if(ex){ if(kind==="belt" && ex.kind==="belt"){ ex.dir=placeDir; ex.mesh.rotation.y=ROT[placeDir]; } return; }
+  const cost = DEF[kind].cost;
+  if(game.money < cost){ toast("Zu wenig Geld für "+DEF[kind].name+" ("+cost+" 💵)",0xff5d6c); return; }
+  game.money -= cost;
+  const mesh = makeMesh(kind,placeDir); const [wx,wz]=tileToWorld(x,z); mesh.position.set(wx,0,wz); scene.add(mesh);
+  const b = {kind,x,z,dir:placeDir,mesh,t:0,buf:{},outBuf:0,outType:null,want:false};
+  grid_.set(k(x,z),b); buildings.push(b);
+}
+function removeAt(x,z){
+  const b = grid_.get(k(x,z)); if(!b) return;
+  game.money += Math.round(DEF[b.kind].cost*0.5);
+  scene.remove(b.mesh); grid_.delete(k(x,z));
+  buildings.splice(buildings.indexOf(b),1);
+  for(const it of items){ if(it.x===x&&it.z===z){ it._dead=true; scene.remove(it.mesh); } }
+  items = items.filter(i=>!i._dead);
+}
+
+/* ===================== EINGABE ===================== */
+let tool = "belt", placeDir = 1, hoverTile=null, laying=false, lastTile=null, downX=0,downY=0,dragged=false;
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+function pickTile(e){
+  ndc.x=(e.clientX/innerWidth)*2-1; ndc.y=-(e.clientY/innerHeight)*2+1;
+  ray.setFromCamera(ndc,camera);
+  const hit = ray.intersectObject(ground)[0]; if(!hit) return null;
+  const x=Math.round(hit.point.x/S+HALF), z=Math.round(hit.point.z/S+HALF);
+  return inBounds(x,z)?{x,z}:null;
+}
+function applyTool(t){ if(!t) return; if(tool==="delete") removeAt(t.x,t.z); else place(tool,t.x,t.z); }
+
+const dom = renderer.domElement;
+dom.addEventListener('pointerdown',e=>{
+  if(e.button!==0) return;
+  downX=e.clientX; downY=e.clientY; dragged=false;
+  const t=pickTile(e);
+  if(t && (tool==="belt"||tool==="delete")){ laying=true; controls.enabled=false; applyTool(t); lastTile=t; }
+});
+dom.addEventListener('pointermove',e=>{
+  hoverTile=pickTile(e); updateGhost();
+  if(Math.abs(e.clientX-downX)+Math.abs(e.clientY-downY)>6) dragged=true;
+  updateTip(e);
+  if(laying && hoverTile && (hoverTile.x!==lastTile.x||hoverTile.z!==lastTile.z)){
+    if(tool==="belt"){ const dd=dirFromDelta(hoverTile.x-lastTile.x, hoverTile.z-lastTile.z); if(dd>=0) placeDir=dd; }
+    applyTool(hoverTile); lastTile=hoverTile;
+  }
+});
+window.addEventListener('pointerup',e=>{
+  if(laying){ laying=false; controls.enabled=true; lastTile=null; return; }
+  if(e.button===0 && !dragged){ const t=pickTile(e); if(t) applyTool(t); }
+});
+dom.addEventListener('contextmenu',e=>{ e.preventDefault(); const t=pickTile(e); if(t) removeAt(t.x,t.z); });
+addEventListener('keydown',e=>{
+  const key=e.key.toLowerCase();
+  if(key==="r"){ placeDir=(placeDir+1)%4; updateGhost(); }
+  else if(KEYMAP[key]){ selectTool(KEYMAP[key]); }
+  else if(key==="escape"){ document.getElementById('intro').classList.add('hide'); }
+});
+
+/* Ghost-Vorschau */
+let ghost=null;
+function ensureGhost(){
+  if(ghost){ scene.remove(ghost); ghost=null; }
+  if(tool==="delete"){ ghost=new THREE.Mesh(new THREE.BoxGeometry(.95,.1,.95), mat(0xff5d6c,{transparent:true,opacity:.4})); ghost.position.y=.06; }
+  else { ghost=makeMesh(tool,placeDir); ghost.traverse(o=>{ if(o.material){ o.material=o.material.clone(); o.material.transparent=true; o.material.opacity=.45; } }); }
+  scene.add(ghost);
+}
+function updateGhost(){
+  if(!ghost) ensureGhost();
+  if(tool==="delete"){ /* nur Pos */ }
+  else { ghost.rotation.y=ROT[placeDir]; }
+  if(hoverTile){ ghost.visible=true; const [wx,wz]=tileToWorld(hoverTile.x,hoverTile.z); ghost.position.set(wx, tool==="delete"?.06:0, wz);
+    const occ = grid_.get(k(hoverTile.x,hoverTile.z));
+    const ok = tool==="delete" ? !!occ : (!occ || (tool==="belt"&&occ.kind==="belt")) && game.money>=DEF[tool].cost;
+    ghost.traverse(o=>{ if(o.material&&o.material.emissive!==undefined){} });
+  } else if(ghost) ghost.visible=false;
+}
+
+/* Tooltip über Gebäuden */
+const tipEl=document.getElementById('tip');
+function updateTip(e){
+  const t=pickTile(e); const b=t&&grid_.get(k(t.x,t.z));
+  if(b){ const [st]=statusOf(b); let extra="";
+    if(RECIPES[b.kind]){ const bufs=Object.entries(b.buf).filter(([,v])=>v>0).map(([kk,v])=>ITEMS[kk].name+"×"+v).join(", "); extra=bufs?("\nLager: "+bufs):""; }
+    tipEl.style.display="block"; tipEl.style.left=(e.clientX+14)+"px"; tipEl.style.top=(e.clientY+14)+"px";
+    tipEl.innerHTML=`<b>${DEF[b.kind].ic} ${DEF[b.kind].name}</b><br><span class="s">${st}${extra.replace(/\n/g,"<br>")}</span>`;
+  } else tipEl.style.display="none";
+}
+
+/* ===================== HOTBAR / UI ===================== */
+const recipeText = {
+  sandmine:"erzeugt Quarzsand", coalmine:"erzeugt Kohle",
+  solar:"+25 Strom (ohne Brennstoff)", pump:"+25 Wasser · braucht Strom",
+  furnace:"Sand + Kohle + Strom → Rohsilizium", siemens:"Rohsilizium + HCl + H₂ + Strom → Reinst-Si",
+  crystal:"Reinst-Si + Argon + Strom → Barren", waferplant:"Barren + Wasser + Strom → 2× Wafer",
+  fab:"Wafer + O₂ + Photoresist + F-Gase + N₂ + Bor/Phosphor/Arsen + Kupfer + Wasser + Strom → Struktur-Wafer",
+  packaging:"Struktur-Wafer + Epoxidharz + Strom → Chip", seller:"verkauft Chips → +"+CHIP_PRICE+" 💵",
+  belt:"transportiert Items · ziehen zum Verlegen, R dreht",
+  delete:"Gebäude abreißen (50 % zurück)",
+};
+function buildHotbar(){
+  const hb=document.getElementById('hotbar'); hb.innerHTML="";
+  const keyFor = kk=> Object.keys(KEYMAP).find(x=>KEYMAP[x]===kk);
+  for(const kk of TOOLS){ const d=DEF[kk]||{name:"Abriss",ic:"❌",cost:0};
+    const el=document.createElement('div'); el.className="tool"+(kk==="delete"?" del":""); el.dataset.k=kk;
+    const ky=keyFor(kk);
+    el.innerHTML=`<div class="ky">${ky?ky.toUpperCase():""}</div><div class="ic">${d.ic}</div><div class="nm">${d.name}</div>`+
+      (kk!=="delete"?`<div class="cst">${d.cost} 💵</div>`:`<div class="cst">&nbsp;</div>`);
+    el.onclick=()=>selectTool(kk);
+    hb.appendChild(el);
+  }
+}
+function selectTool(kk){ tool=kk; ensureGhost(); updateGhost();
+  document.querySelectorAll('.tool').forEach(e=>e.classList.toggle('sel', e.dataset.k===kk));
+  const d=DEF[kk]||{name:"Abriss",ic:"❌",cost:0};
+  const inf=document.getElementById('info');
+  let util=""; if(d.powerUse)util+=` ⚡${d.powerUse}`; if(d.powerGen)util+=` ⚡+${d.powerGen}`; if(d.waterUse)util+=` 💧${d.waterUse}`; if(d.waterGen)util+=` 💧+${d.waterGen}`;
+  inf.innerHTML=`<h3>${d.ic} ${d.name}</h3><div class="cost">${kk==="delete"?"":d.cost+" 💵"}${util}</div>`+
+    `<div class="recipe">${recipeText[kk]||""}</div>`+
+    `<p>${kk==="delete"?"Klicke oder ziehe über Gebäude zum Abreißen.":"Linksklick auf eine Kachel zum Bauen. <kbd>R</kbd> dreht die Ausrichtung."}</p>`;
+}
+function buildSupplies(){
+  const list=document.getElementById('sup-list'); list.innerHTML="";
+  for(const key in SUP){ const s=SUP[key];
+    const el=document.createElement('div'); el.className="sup"; el.id="sup-"+key;
+    el.innerHTML=`<span class="nm">${s.name}</span><span class="st">0</span>`; list.appendChild(el);
+  }
+}
+function updateSupplies(){
+  let costRate=0;
+  for(const key in SUP){ const s=SUP[key]; const el=document.getElementById('sup-'+key); if(!el) continue;
+    const st=el.querySelector('.st'); st.textContent=Math.floor(s.stock); st.classList.toggle('low', s.stock<12); }
+}
+
+let toastTimer=[];
+function toast(msg,col=0xffb454){
+  const c=document.getElementById('toast'); const d=document.createElement('div'); d.className="tmsg";
+  d.style.borderColor="#"+col.toString(16).padStart(6,'0'); d.textContent=msg; c.appendChild(d);
+  setTimeout(()=>{ d.style.opacity=0; d.style.transition=".4s"; }, 1600); setTimeout(()=>d.remove(),2100);
+}
+
+function updateHUD(){
+  document.getElementById('s-money').textContent = Math.floor(game.money)+" 💵";
+  document.getElementById('s-money').style.color = game.money<200?"var(--bad)":"var(--good)";
+  const ps=document.getElementById('s-power'); ps.textContent=`${game.powerDemand}/${game.powerGen}`; ps.style.color=game.powerOK?"var(--good)":"var(--bad)";
+  const ws=document.getElementById('s-water'); ws.textContent=`${game.waterDemand}/${game.waterGen}`; ws.style.color=game.waterOK?"var(--good)":"var(--bad)";
+  document.getElementById('s-chips').textContent=game.chips;
+  // Verkaufsrate /min
+  const now=performance.now(); game.soldWindow=game.soldWindow.filter(t=>now-t<60000);
+  document.getElementById('s-rate').textContent=(game.soldWindow.length*CHIP_PRICE);
+}
+
+/* ===================== LOOP ===================== */
+const clock=new THREE.Clock();
+let started=false;
+function loop(){
+  requestAnimationFrame(loop);
+  const dt=Math.min(clock.getDelta(),.05);
+  if(started){
+    computeUtilities();
+    tickWork(dt);
+    moveItems(dt);
+    autoBuy(dt);
+    updateIndicators();
+    updateSupplies();
+    updateHUD();
+  }
+  // Belt-Pfeile pulsieren
+  const pulse=.6+.4*Math.sin(performance.now()*.006);
+  for(const b of buildings){ if(b.kind==="belt"&&b.mesh.userData.arrow) b.mesh.userData.arrow.material.emissiveIntensity=pulse; }
+  controls.update();
+  renderer.render(scene,camera);
+}
+loop();
+
+/* ===================== INIT ===================== */
+document.getElementById('chaintext').innerHTML =
+ `⛏️ Quarzsand &nbsp;+&nbsp; ⚫ Kohle\n`+
+ `&nbsp;&nbsp;↳ 🔥 <b>Lichtbogenofen</b> (Strom) → Rohsilizium\n`+
+ `&nbsp;&nbsp;↳ ⚗️ <b>Siemens-Reaktor</b> (HCl, H₂) → Reinst-Silizium\n`+
+ `&nbsp;&nbsp;↳ 💎 <b>Kristallzieher</b> (Argon) → Barren\n`+
+ `&nbsp;&nbsp;↳ 🥞 <b>Wafer-Werk</b> (Wasser) → Wafer\n`+
+ `&nbsp;&nbsp;↳ 🔬 <b>Frontend-Fab</b> (O₂, Photoresist, Dotierstoffe, Gase, Kupfer, Wasser) → Struktur-Wafer\n`+
+ `&nbsp;&nbsp;↳ 📦 <b>Packaging</b> (Epoxidharz) → Chip\n`+
+ `&nbsp;&nbsp;↳ 🚚 <b>Versand</b> → 💰 +${CHIP_PRICE}`;
+buildHotbar(); buildSupplies(); selectTool("belt");
+document.getElementById('back').onclick=()=>location.href='index.html';
+document.getElementById('startbtn').onclick=()=>{ document.getElementById('intro').classList.add('hide'); started=true; toast("Tipp: Beginne mit ☀️ Solarkraftwerk und ⛏️ Sandgrube!",0x34e0c0); };
+</script>
+</body>
+</html>
