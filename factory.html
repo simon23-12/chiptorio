@@ -285,10 +285,9 @@ function makeMesh(kind,dir){
   const CO=(r,h,c,o,s=12)=>new THREE.Mesh(new THREE.ConeGeometry(r,h,s),mat(c,o));
 
   if(kind==="belt"){
-    add(B(.92,.07,.92,0x2b3a52,{roughness:.8}),0,.05,0);
-    add(B(.92,.05,.1,0x18243c),0,.1,-.41); add(B(.92,.05,.1,0x18243c),0,.1,.41);
-    const a=add(CO(.16,.3,0x66d0ff,{emissive:0x123244,emissiveIntensity:1},4),0,.14,.05,Math.PI/2); g.userData.arrow=a;
-    g.rotation.y=ROT[dir]; return g;
+    add(B(.92,.06,.92,0x1a2740,{roughness:.85}),0,.03,0); // Basisplatte
+    buildBeltVisual(g, dir, null);                        // Form (gerade/Kurve) berechnet
+    return g;
   }
   if(kind==="cable"){ // Stromkabel: Mast + leuchtende Leitungen
     add(B(.9,.03,.9,0x241f10),0,.015,0);
@@ -403,9 +402,43 @@ function pipeInflow(b){
   return null;
 }
 function refreshPipe(b){ buildPipeVisual(b.mesh, b.dir, pipeInflow(b)); }
-function refreshPipesAround(x,z){
+
+/* ===================== FÖRDERBAND-FORM (gerade / Kurve) ===================== */
+function buildBeltVisual(g, dir, inflowSide){
+  if(g.userData.tubeParts){ for(const m of g.userData.tubeParts){ g.remove(m); m.geometry.dispose(); } }
+  if(g.userData.arrow){ g.remove(g.userData.arrow); g.userData.arrow.geometry.dispose(); }
+  g.rotation.y=0; const parts=[]; g.userData.tubeParts=parts;
+  const opp=(dir+2)%4; const surfMat=()=>mat(0x33455f,{roughness:.7});
+  if(inflowSide!=null && inflowSide!==opp && inflowSide!==dir){
+    const cfg=_elbowCfg[[inflowSide,dir].sort((a,b)=>a-b).join(",")];
+    const geo=new THREE.RingGeometry(.26,.74,16,1,0,Math.PI/2); geo.rotateX(-Math.PI/2); geo.rotateY(cfg.ry);
+    const m=new THREE.Mesh(geo,surfMat()); m.position.set(cfg.c[0]*S,.07,cfg.c[1]*S); g.add(m); parts.push(m);
+  } else {
+    const horiz=(dir===1||dir===3);
+    const geo=new THREE.BoxGeometry(horiz?.96:.52,.05,horiz?.52:.96);
+    const m=new THREE.Mesh(geo,surfMat()); m.position.set(0,.07,0); g.add(m); parts.push(m);
+  }
+  const ageo=new THREE.ConeGeometry(.16,.3,4); ageo.rotateX(Math.PI/2);
+  const am=new THREE.Mesh(ageo,mat(0x66d0ff,{emissive:0x123244,emissiveIntensity:1}));
+  am.position.set(DIRS[dir][0]*.14,.14,DIRS[dir][1]*.14); am.rotation.y=ROT[dir]; g.add(am); g.userData.arrow=am;
+}
+function beltInflow(b){
+  const opp=(b.dir+2)%4;
+  const feeds=s=>{ const nx=b.x+DIRS[s][0], nz=b.z+DIRS[s][1]; const nb=grid_.get(k(nx,nz)); if(!nb) return false;
+    if(nb.kind==="belt") return nb.x+DIRS[nb.dir][0]===b.x && nb.z+DIRS[nb.dir][1]===b.z; // Nachbar-Band zeigt herein
+    const out = SOURCES[nb.kind]?SOURCES[nb.kind].out : (RECIPES[nb.kind]?RECIPES[nb.kind].out:null);
+    return out && !isFluid(out); // Quelle/Maschine, die Feststoffe ausgibt
+  };
+  if(feeds(opp)) return opp;
+  for(const s of [(b.dir+1)%4,(b.dir+3)%4]) if(feeds(s)) return s;
+  return null;
+}
+function refreshBelt(b){ buildBeltVisual(b.mesh, b.dir, beltInflow(b)); }
+
+function refreshPipesAround(x,z){ // erfrischt Rohre UND Bänder (Ecken) rund um (x,z)
   for(const [tx,tz] of [[x,z],[x+1,z],[x-1,z],[x,z+1],[x,z-1]]){
-    const b=grid_.get(k(tx,tz)); if(b && b.kind==="pipe") refreshPipe(b);
+    const b=grid_.get(k(tx,tz)); if(!b) continue;
+    if(b.kind==="pipe") refreshPipe(b); else if(b.kind==="belt") refreshBelt(b);
   }
 }
 
@@ -594,7 +627,7 @@ function place(kind,x,z,free){
   for(const [cx,cz] of cells){ if(!inBounds(cx,cz)) return false; }
   const ex = grid_.get(k(x,z));
   if((kind==="belt"||kind==="pipe"||kind==="cable") && ex && ex.kind===kind){ ex.dir=placeDir;
-    if(kind==="pipe"){ refreshPipesAround(x,z); } else { ex.mesh.rotation.y=ROT[placeDir]; } return true; }
+    if(kind==="cable"){ ex.mesh.rotation.y=ROT[placeDir]; } else { refreshPipesAround(x,z); } return true; }
   for(const [cx,cz] of cells){ if(grid_.get(k(cx,cz))) return false; } // Feld belegt
   if(!free){
     const cost = DEF[kind].cost;
@@ -689,11 +722,15 @@ function ensureGhost(){
   else { ghost=makeMesh(tool,placeDir); ghost.traverse(o=>{ if(o.material){ o.material=o.material.clone(); o.material.transparent=true; o.material.opacity=.45; } }); }
   scene.add(ghost);
 }
+function dimGhost(g){ g.traverse(o=>{ if(o.material){ o.material.transparent=true; o.material.opacity=.5; } }); }
 function updateGhost(){
   if(!ghost) ensureGhost();
   if(!hoverTile){ ghost.visible=false; return; }
   ghost.visible=true;
-  if(tool!=="delete") ghost.rotation.y=ROT[placeDir];
+  // Band/Rohr: Geometrie ist bereits weltausgerichtet → bei Richtungswechsel neu bauen (keine Gruppen-Rotation!)
+  if(tool==="belt"||tool==="pipe"){
+    if(ghost.userData.gdir!==placeDir){ (tool==="belt"?buildBeltVisual:buildPipeVisual)(ghost, placeDir, null); dimGhost(ghost); ghost.userData.gdir=placeDir; }
+  } else if(tool!=="delete"){ ghost.rotation.y=ROT[placeDir]; }
   const sz=(tool!=="delete"&&DEF[tool]&&DEF[tool].size)||[1,1];
   const x=hoverTile.x,z=hoverTile.z;
   const cwx=(x+(sz[0]-1)/2 - HALF)*S, cwz=(z+(sz[1]-1)/2 - HALF)*S;

@@ -88,6 +88,8 @@
     -webkit-background-clip:text;background-clip:text;color:transparent}
   .brand-sub{color:var(--dim);font-size:14px;max-width:460px;line-height:1.55;margin:2px 0 26px}
   .menu-cards{display:flex;gap:18px;flex-wrap:wrap;justify-content:center;max-width:760px}
+  .menu-video{width:min(760px,94vw);margin-top:16px}
+  .menu-video iframe{display:block;width:100%;aspect-ratio:16/9;border:1px solid #24385c;border-radius:14px;box-shadow:0 16px 40px #0009}
   .card{pointer-events:auto;cursor:pointer;width:332px;text-align:left;border-radius:16px;padding:20px 22px;
     background:linear-gradient(160deg,#15233f,#0c1424);border:1px solid #24385c;transition:.18s;
     display:flex;flex-direction:column;gap:5px;position:relative;overflow:hidden}
@@ -98,8 +100,6 @@
   .card p{margin:0;font-size:12.5px;color:var(--dim);line-height:1.45}
   .card .go{margin-top:8px;font-family:var(--mono);font-size:11px;color:var(--acc);letter-spacing:1px}
   .card.factory .go{color:#f5931a}
-  .badge-soon{position:absolute;top:13px;right:13px;font-family:var(--mono);font-size:9px;letter-spacing:1.5px;
-    background:#f5931a22;color:#ffb454;border:1px solid #f5931a66;padding:3px 9px;border-radius:20px}
   .menu-foot{margin-top:30px;font-family:var(--mono);font-size:10px;color:#44597a;letter-spacing:2px}
   .back-btn{position:fixed;top:18px;left:18px;z-index:40}
   #to-menu{font-size:12px;padding:6px 13px}
@@ -181,12 +181,20 @@
       <div class="go">▸ Lernmodus starten</div>
     </div>
     <div class="card factory" id="btn-factory">
-      <span class="badge-soon">NEU</span>
       <div class="ic">🏭</div>
       <h3>Fabrik bauen</h3>
       <p>Baue eine Chipfabrik im Fließband-Stil: Förderbänder legen, Maschinen verketten und dabei Energie, Wasser und Rohstoffe im Blick behalten.</p>
       <div class="go">▸ Fabrik starten</div>
     </div>
+  </div>
+  <div class="menu-video">
+    <iframe
+      src="https://www.youtube.com/embed/SDV1Rc4mi0Q"
+      title="YouTube Video Player"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+      referrerpolicy="strict-origin-when-cross-origin"
+      allowfullscreen>
+    </iframe>
   </div>
   <div class="menu-actions">
     <button class="pill" id="btn-options">⚙ Optionen</button>
