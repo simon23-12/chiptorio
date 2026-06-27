@@ -297,12 +297,10 @@ function makeMesh(kind,dir){
     add(B(.04,.04,.56,0xffcf5a,{emissive:0x6a4a00,emissiveIntensity:.9}),0,.3,0);
     g.rotation.y=ROT[dir]; return g;
   }
-  if(kind==="pipe"){ // Rohr: liegende Röhre (entlang Z = Fließrichtung) mit Pfeil
-    add(B(.92,.05,.92,0x16323e),0,.025,0);
-    add(C(.16,.16,.94,0x57b6d8,{metalness:.6,roughness:.3}),0,.18,0,Math.PI/2);
-    add(C(.18,.18,.1,0x2a6a8a),0,.18,-.42,Math.PI/2); add(C(.18,.18,.1,0x2a6a8a),0,.18,.42,Math.PI/2);
-    const a=add(CO(.12,.24,0x9fe8ff,{emissive:0x1c5a6e,emissiveIntensity:1},4),0,.36,.04,Math.PI/2); g.userData.arrow=a;
-    g.rotation.y=ROT[dir]; return g;
+  if(kind==="pipe"){ // Rohr: Form (gerade/Bogen) wird in buildPipeVisual berechnet
+    add(B(.92,.05,.92,0x16323e),0,.025,0); // Basisplatte
+    buildPipeVisual(g, dir, null);         // Standard gerade; Ecken nach dem Platzieren via refreshPipe
+    return g;
   }
   switch(kind){
     case "sandmine": // Grube + Sandhaufen
@@ -369,6 +367,46 @@ function makeMesh(kind,dir){
   // Maschinen/Quellen geben Material an ALLEN 4 Seiten aus → kein einzelner Ausgangspfeil mehr.
   g.rotation.y=ROT[dir];
   return g;
+}
+
+/* ===================== ROHR-FORM (gerade / runder Bogen) ===================== */
+const _pipeMat=()=>mat(0x57b6d8,{metalness:.6,roughness:.3});
+// Eck-Konfiguration je (Eingangsseite,Ausgangsseite)-Paar: Mittelpunkt + Drehung des Viertel-Torus
+const _elbowCfg={"0,1":{c:[.5,-.5],ry:Math.PI},"0,3":{c:[-.5,-.5],ry:3*Math.PI/2},"2,3":{c:[-.5,.5],ry:0},"1,2":{c:[.5,.5],ry:Math.PI/2}};
+function buildPipeVisual(g, dir, inflowSide){
+  if(g.userData.tubeParts){ for(const m of g.userData.tubeParts){ g.remove(m); m.geometry.dispose(); } }
+  if(g.userData.arrow){ g.remove(g.userData.arrow); g.userData.arrow.geometry.dispose(); }
+  g.rotation.y=0; const parts=[]; g.userData.tubeParts=parts;
+  const opp=(dir+2)%4;
+  if(inflowSide!=null && inflowSide!==opp && inflowSide!==dir){
+    const cfg=_elbowCfg[[inflowSide,dir].sort((a,b)=>a-b).join(",")];
+    const geo=new THREE.TorusGeometry(.5,.16,10,18,Math.PI/2); geo.rotateX(-Math.PI/2); geo.rotateY(cfg.ry);
+    const m=new THREE.Mesh(geo,_pipeMat()); m.position.set(cfg.c[0]*S,.18,cfg.c[1]*S); g.add(m); parts.push(m);
+  } else {
+    const horiz=(dir===1||dir===3);
+    const geo=new THREE.CylinderGeometry(.16,.16,1.0,14); if(horiz) geo.rotateZ(Math.PI/2); else geo.rotateX(Math.PI/2);
+    const m=new THREE.Mesh(geo,_pipeMat()); m.position.set(0,.18,0); g.add(m); parts.push(m);
+  }
+  const ageo=new THREE.ConeGeometry(.12,.24,4); ageo.rotateX(Math.PI/2); // zeigt +z
+  const am=new THREE.Mesh(ageo,mat(0x9fe8ff,{emissive:0x1c5a6e,emissiveIntensity:1}));
+  am.position.set(DIRS[dir][0]*.18,.36,DIRS[dir][1]*.18); am.rotation.y=ROT[dir]; g.add(am); g.userData.arrow=am;
+}
+// Woher fließt in dieses Rohr hinein? (für die Eck-Erkennung)
+function pipeInflow(b){
+  const opp=(b.dir+2)%4;
+  const feeds=s=>{ const nx=b.x+DIRS[s][0], nz=b.z+DIRS[s][1]; const nb=grid_.get(k(nx,nz)); if(!nb) return false;
+    if(nb.kind==="pipe") return nb.x+DIRS[nb.dir][0]===b.x && nb.z+DIRS[nb.dir][1]===b.z; // Nachbar-Rohr zeigt herein
+    return nb.kind==="pump"||nb.kind==="electrolyseur"; // Fluid-Quellen geben rundum ab
+  };
+  if(feeds(opp)) return opp;                       // gerade bevorzugt
+  for(const s of [(b.dir+1)%4,(b.dir+3)%4]) if(feeds(s)) return s; // sonst Bogen
+  return null;
+}
+function refreshPipe(b){ buildPipeVisual(b.mesh, b.dir, pipeInflow(b)); }
+function refreshPipesAround(x,z){
+  for(const [tx,tz] of [[x,z],[x+1,z],[x-1,z],[x,z+1],[x,z-1]]){
+    const b=grid_.get(k(tx,tz)); if(b && b.kind==="pipe") refreshPipe(b);
+  }
 }
 
 /* ===================== ITEMS ===================== */
@@ -555,7 +593,8 @@ function place(kind,x,z,free){
   const cells=cellsFor(kind,x,z);
   for(const [cx,cz] of cells){ if(!inBounds(cx,cz)) return false; }
   const ex = grid_.get(k(x,z));
-  if((kind==="belt"||kind==="pipe"||kind==="cable") && ex && ex.kind===kind){ ex.dir=placeDir; ex.mesh.rotation.y=ROT[placeDir]; return true; }
+  if((kind==="belt"||kind==="pipe"||kind==="cable") && ex && ex.kind===kind){ ex.dir=placeDir;
+    if(kind==="pipe"){ refreshPipesAround(x,z); } else { ex.mesh.rotation.y=ROT[placeDir]; } return true; }
   for(const [cx,cz] of cells){ if(grid_.get(k(cx,cz))) return false; } // Feld belegt
   if(!free){
     const cost = DEF[kind].cost;
@@ -569,6 +608,7 @@ function place(kind,x,z,free){
   for(const [cx,cz] of cells) grid_.set(k(cx,cz),b);
   if(kind!=="belt" && kind!=="pipe" && kind!=="cable"){ const lab=document.createElement('div'); lab.className="blabel"; document.getElementById('labels').appendChild(lab); b.labelEl=lab; }
   buildings.push(b);
+  for(const [cx,cz] of cells) refreshPipesAround(cx,cz); // Rohr-Ecken (neu + Nachbarn) aktualisieren
   return true;
 }
 function removeAt(x,z){
@@ -580,6 +620,7 @@ function removeAt(x,z){
   buildings.splice(buildings.indexOf(b),1);
   for(const it of items){ if((b.cells||[[b.x,b.z]]).some(c=>c[0]===it.x&&c[1]===it.z)){ it._dead=true; scene.remove(it.mesh); } }
   items = items.filter(i=>!i._dead);
+  for(const [cx,cz] of (b.cells||[[b.x,b.z]])) refreshPipesAround(cx,cz); // Rohr-Ecken der Nachbarn neu berechnen
 }
 
 /* ===================== EINGABE ===================== */
@@ -665,8 +706,13 @@ function updateTip(e){
   const t=pickTile(e); const b=t&&grid_.get(k(t.x,t.z));
   if(b){ const [st]=statusOf(b); let extra="";
     if(RECIPES[b.kind]){ const bufs=Object.entries(b.buf).filter(([,v])=>v>0).map(([kk,v])=>ITEMS[kk].name+"×"+v).join(", "); extra=bufs?("\nLager: "+bufs):""; }
+    if(b.kind==="belt"||b.kind==="pipe"){ const cnt={};
+      for(const it of items){ if(!it._dead&&it.x===t.x&&it.z===t.z) cnt[it.type]=(cnt[it.type]||0)+1; }
+      const ks=Object.keys(cnt);
+      extra="\nInhalt: "+(ks.length?ks.map(kk=>ITEMS[kk].name+(cnt[kk]>1?" ×"+cnt[kk]:"")).join(", "):"leer");
+    }
     tipEl.style.display="block"; tipEl.style.left=(e.clientX+14)+"px"; tipEl.style.top=(e.clientY+14)+"px";
-    tipEl.innerHTML=`<b>${DEF[b.kind].ic} ${DEF[b.kind].name}</b><br><span class="s">${st}${extra.replace(/\n/g,"<br>")}</span>`;
+    tipEl.innerHTML=`<b>${DEF[b.kind].ic} ${DEF[b.kind].name}</b>`+((st||extra)?`<br><span class="s">${st}${extra.replace(/\n/g,"<br>")}</span>`:"");
   } else tipEl.style.display="none";
 }
 
