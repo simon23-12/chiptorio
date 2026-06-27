@@ -79,7 +79,7 @@
   .screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
     text-align:center;pointer-events:auto;padding:28px;z-index:25;
     background:radial-gradient(circle at 50% 40%, rgba(16,26,46,.80), rgba(6,10,18,.95))}
-  #menu{z-index:28;justify-content:flex-start;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;
+  #menu{z-index:28;justify-content:flex-start;overflow-y:hidden;overflow-x:hidden;
     padding-top:16px;padding-bottom:40px}
   .logo-badge{width:150px;height:150px;border-radius:32px;overflow:hidden;background:#fff;
     box-shadow:0 0 0 1px #ffffff22, 0 18px 50px #000a, 0 0 60px #1f63c855, 0 0 90px #f5931233}
@@ -1076,9 +1076,9 @@ const SCREENS=['menu','overlay','coming','outro','options'];
 function show(id){ SCREENS.forEach(s=>el(s).classList.add('hide')); if(id) el(id).classList.remove('hide');
   if(id==='menu'){
     const menu = el('menu');
+    menu.style.overflowY = 'hidden';
     menu.scrollTop = 0;
-    requestAnimationFrame(()=>{ menu.scrollTop = 0; });
-    setTimeout(()=>{ menu.scrollTop = 0; }, 0);
+    requestAnimationFrame(()=>{ menu.scrollTop = 0; menu.style.overflowY = 'auto'; });
   }
   el('ui').classList.toggle('hide', !!id); currentScreen=id; applyMusic(trackForScreen(id)); }
 function resetGame(){ state.purity=5; state.yield=100; state.stage=0; loadedIndex=0; refreshMeters(); }
@@ -1099,9 +1099,7 @@ el('start').onclick=()=>{
 };
 
 show('menu');
-el('menu').scrollTop = 0;
 refreshMeters();
-window.addEventListener('load', () => { el('menu').scrollTop = 0; });
 </script>
 </body>
 </html>
