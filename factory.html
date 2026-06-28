@@ -28,9 +28,10 @@
   #speedctl{gap:4px}
   .spd{cursor:pointer;font-family:var(--mono);font-size:11px;color:var(--dim);padding:2px 6px;border-radius:6px;border:1px solid transparent}
   .spd:hover{color:var(--txt)} .spd.sel{background:#0c2b27;border-color:var(--acc);color:var(--acc)}
-  #back,#music-btn{pointer-events:auto;font-family:var(--sans);font-weight:600;font-size:12px;cursor:pointer;
+  #back,#music-btn,#save-btn{pointer-events:auto;font-family:var(--sans);font-weight:600;font-size:12px;cursor:pointer;
     border:1px solid #33486e;background:transparent;color:var(--dim);padding:7px 12px;border-radius:9px}
-  #back:hover,#music-btn:hover{background:#16223a;color:var(--txt)}
+  #back:hover,#music-btn:hover,#save-btn:hover{background:#16223a;color:var(--txt)}
+  #save-btn{border-color:#2c6e4a;color:var(--good)}
   #music-btn{padding:7px 10px}
   #title{font-family:var(--mono);font-weight:700;letter-spacing:2px;color:var(--orange);font-size:14px;margin-right:4px}
 
@@ -98,6 +99,7 @@
 <div id="ui">
   <div id="top">
     <button id="back">← Hauptmenü</button>
+    <button id="save-btn" title="Spiel speichern">💾 Speichern</button>
     <button id="music-btn" class="ghost" title="Musik an/aus">🔊</button>
     <span id="title">CHIPTORIO · FABRIK</span>
     <div class="stat"><span class="lbl">GELD</span><b id="s-money" style="color:var(--good)">—</b></div>
@@ -226,7 +228,7 @@ const TOOLS = ["belt","pipe","cable","solar","battery","nuclear","electrolyseur"
 const KEYMAP = {}; // Bauteile werden per Mausklick in der Leiste gewählt — keine Hotkeys (Tasten gehören der Navigation)
 
 const DAYLEN = 100; // Sekunden pro Tag/Nacht-Zyklus
-const game = { money:3500, chips:0, powerGen:0, powerDemand:0, powerOK:true, rate:0, soldWindow:[],
+const game = { money:4500, chips:0, powerGen:0, powerDemand:0, powerOK:true, rate:0, soldWindow:[],
   storedPower:0, powerCap:0, timeOfDay:0.33, sun:1, speed:1 };
 
 /* ===================== THREE SETUP ===================== */
@@ -274,6 +276,7 @@ function dirFromDelta(dx,dz){ if(dx===1)return 1; if(dx===-1)return 3; if(dz===1
 const grid_ = new Map();      // key -> building
 const buildings = [];
 let items = [];
+const patches = []; // Boden-Markierungen der Rohstoffquellen (für Speichern/Laden)
 
 /* ===================== GEBÄUDE-MESH ===================== */
 function makeMesh(kind,dir){
@@ -945,7 +948,7 @@ document.getElementById('chaintext').innerHTML =
 function addPatch(kind,x,z){ // Boden-Markierung für das Vorkommen
   const col = kind==="sandmine"?0xc4a661 : kind==="coalmine"?0x1c1c1c : 0x2f7fb0;
   const m=new THREE.Mesh(new THREE.CircleGeometry(.66,22), new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.4}));
-  m.rotation.x=-Math.PI/2; const [wx,wz]=tileToWorld(x,z); m.position.set(wx,.02,wz); scene.add(m);
+  m.rotation.x=-Math.PI/2; const [wx,wz]=tileToWorld(x,z); m.position.set(wx,.02,wz); scene.add(m); patches.push(m);
 }
 function scatterResources(){
   const want=[["sandmine",4],["coalmine",3],["pump",3]];
@@ -965,7 +968,49 @@ function scatterResources(){
   placeDir=1; // zurücksetzen
 }
 
-buildHotbar(); buildSupplies(); selectTool("belt"); scatterResources();
+/* ===================== SPEICHERN / LADEN ===================== */
+const SAVE_KEY="chiptorio-save";
+function saveGame(){
+  try{
+    const data={ v:1, money:game.money, chips:game.chips, timeOfDay:game.timeOfDay,
+      autobuy:document.getElementById('autobuy').checked,
+      sup:Object.fromEntries(Object.keys(SUP).map(kk=>[kk,SUP[kk].stock])),
+      buildings:buildings.map(b=>({kind:b.kind,x:b.x,z:b.z,dir:b.dir,fixed:!!b.fixed,buf:b.buf,outBuf:b.outBuf,outType:b.outType,stored:b.stored,h2Buf:b.h2Buf||0,o2Buf:b.o2Buf||0,t:b.t})),
+      items:items.filter(i=>!i._dead).map(i=>({type:i.type,x:i.x,z:i.z,prog:i.prog})) };
+    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+    toast("💾 Spiel gespeichert.",0x34e0c0);
+  }catch(e){ toast("Speichern fehlgeschlagen.",0xff5d6c); }
+}
+function clearFactory(){
+  for(const b of buildings){ scene.remove(b.mesh); if(b.labelEl) b.labelEl.remove(); }
+  buildings.length=0; grid_.clear();
+  for(const it of items) scene.remove(it.mesh); items.length=0;
+  for(const p of patches) scene.remove(p); patches.length=0;
+}
+function loadGame(){
+  const raw=localStorage.getItem(SAVE_KEY); if(!raw) return false;
+  let d; try{ d=JSON.parse(raw); }catch(e){ return false; }
+  if(!d||!Array.isArray(d.buildings)) return false;
+  clearFactory();
+  for(const sb of d.buildings){ placeDir=sb.dir||1;
+    if(place(sb.kind,sb.x,sb.z,true)){ const nb=grid_.get(k(sb.x,sb.z)); if(nb){
+      nb.buf=sb.buf||{}; nb.outBuf=sb.outBuf||0; nb.outType=sb.outType||null; nb.stored=sb.stored||0;
+      nb.h2Buf=sb.h2Buf||0; nb.o2Buf=sb.o2Buf||0; nb.t=sb.t||0; nb.fixed=!!sb.fixed;
+      if(nb.fixed && (nb.kind==="sandmine"||nb.kind==="coalmine"||nb.kind==="pump")) addPatch(nb.kind,nb.x,nb.z);
+    } } }
+  placeDir=1;
+  for(const si of (d.items||[])){ const t=grid_.get(k(si.x,si.z)); if(t&&(t.kind==="belt"||t.kind==="pipe")) makeItem(si.type,si.x,si.z,si.prog); }
+  game.money=(d.money!=null?d.money:game.money); game.chips=d.chips||0; game.timeOfDay=d.timeOfDay||0.33; game.speed=1; game.soldWindow=[];
+  for(const kk in SUP){ if(d.sup && d.sup[kk]!=null) SUP[kk].stock=d.sup[kk]; }
+  const ab=document.getElementById('autobuy'); if(ab && d.autobuy!=null) ab.checked=d.autobuy;
+  document.querySelectorAll('#speedctl .spd').forEach(e=>e.classList.toggle('sel', e.dataset.s==='1'));
+  document.getElementById('intro').classList.add('hide'); started=true;
+  if(typeof musicOn!=="undefined" && musicOn) playTrack();
+  toast("📂 Spielstand geladen.",0x34e0c0);
+  return true;
+}
+
+buildHotbar(); buildSupplies(); selectTool("belt");
 document.querySelectorAll('#speedctl .spd').forEach(el=>{ el.onclick=()=>{ game.speed=+el.dataset.s;
   document.querySelectorAll('#speedctl .spd').forEach(e=>e.classList.toggle('sel', e===el)); }; });
 /* ===================== HINTERGRUNDMUSIK (track1–5) ===================== */
@@ -979,7 +1024,13 @@ document.getElementById('music-btn').onclick=()=>{ musicOn=!musicOn; localStorag
 updateMusicBtn();
 
 document.getElementById('back').onclick=()=>{ musicEl.pause(); location.href='index.html'; };
+document.getElementById('save-btn').onclick=()=>saveGame();
 document.getElementById('startbtn').onclick=()=>{ document.getElementById('intro').classList.add('hide'); started=true; if(musicOn) playTrack(); toast("Sand, Kohle & Wasser liegen schon auf der Karte ✦ baue ☀️ Solar, verlege 🔌 Kabel & ➤ Bänder. Taste T = Tipp.",0x34e0c0); };
+
+/* Laden (aus dem Hauptmenü) oder frische Karte erzeugen */
+if(sessionStorage.getItem('chiptorio-load')==='1' && localStorage.getItem(SAVE_KEY)){
+  sessionStorage.removeItem('chiptorio-load'); if(!loadGame()) scatterResources();
+} else { sessionStorage.removeItem('chiptorio-load'); scatterResources(); }
 </script>
 </body>
 </html>

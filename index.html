@@ -210,6 +210,7 @@
       </iframe>
     </div>
     <div class="menu-actions">
+      <button class="pill" id="btn-load">📂 Spiel laden</button>
       <button class="pill" id="btn-options">⚙ Optionen</button>
     </div>
     <div class="menu-foot">◆ LMG TECH</div>
@@ -1089,6 +1090,10 @@ function resetGame(){ state.purity=5; state.yield=100; state.stage=0; loadedInde
 el('btn-learn').onclick    = ()=> show('overlay');
 el('btn-factory').onclick  = ()=> location.href='factory.html';
 el('btn-options').onclick  = ()=> show('options');
+(()=>{ const lb=el('btn-load'); const has=!!localStorage.getItem('chiptorio-save');
+  if(!has){ lb.disabled=true; lb.style.opacity=.45; lb.style.cursor='not-allowed'; lb.title='Kein Spielstand vorhanden'; }
+  lb.onclick=()=>{ if(!localStorage.getItem('chiptorio-save')) return; sessionStorage.setItem('chiptorio-load','1'); location.href='factory.html'; };
+})();
 el('options-back').onclick = ()=> show('menu');
 el('coming-back').onclick  = ()=> show('menu');
 el('coming-back2').onclick = ()=> show('menu');
