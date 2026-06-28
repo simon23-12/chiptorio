@@ -328,12 +328,16 @@ function makeMesh(kind,dir){
       add(C(.46,.6,1.15,0xd2d7de,{roughness:.7}),  W/2-.78,.78,0); add(C(.52,.52,.16,0x9fb0bf),  W/2-.78,1.38,0);
       add(SP(.44,0x7aa83f,{emissive:0x4a7711,emissiveIntensity:.5}),0,.62,0);
       add(B(.5,.16,.5,0xffd24a,{emissive:0x4a3a00,emissiveIntensity:.5}),0,.5,H/2-.42); indY=1.7; break; }
-    case "electrolyseur": // Elektrolyse-Zelle: Glastank mit zwei Gasblasen-Säulen (H₂/O₂)
-      add(B(.8,.16,.8,0x1d5563),0,.08,0);
-      add(B(.66,.5,.66,0x4fd0e0,{transparent:true,opacity:.4,emissive:0x186070,emissiveIntensity:.5}),0,.42,0);
-      add(C(.07,.07,.5,0x9fe8ff,{emissive:0x2c7a90,emissiveIntensity:.8}),-.16,.42,0); // H₂-Elektrode
-      add(C(.07,.07,.5,0xe6f0ff,{emissive:0x6a8aa0,emissiveIntensity:.6}), .16,.42,0); // O₂-Elektrode
-      add(SP(.06,0x9fe8ff,{emissive:0x2c7a90,emissiveIntensity:.7}),-.16,.6,0); add(SP(.05,0xe6f0ff,{emissive:0x6a8aa0,emissiveIntensity:.5}),.16,.62,0); indY=.86; break;
+    case "electrolyseur": // Kern (Mitte) + fest verbaute Rohre: H₂ nach vorne (+z), O₂ nach hinten (−z)
+      add(B(.78,.16,.78,0x1d5563),0,.08,0);
+      add(B(.6,.5,.6,0x4fd0e0,{transparent:true,opacity:.42,emissive:0x186070,emissiveIntensity:.5}),0,.42,0);
+      add(SP(.06,0x9fe8ff,{emissive:0x2c7a90,emissiveIntensity:.8}),-.14,.6,0); add(SP(.05,0xe6f0ff,{emissive:0x6a8aa0,emissiveIntensity:.6}),.14,.62,0);
+      // H₂-Rohr (+z, hellcyan)
+      add(C(.16,.16,1.0,0x9fe8ff,{metalness:.5,roughness:.3,emissive:0x2c7a90,emissiveIntensity:.45}),0,.2,1.0,Math.PI/2);
+      add(CO(.12,.24,0x9fe8ff,{emissive:0x2c7a90,emissiveIntensity:1},4),0,.38,1.4,Math.PI/2);
+      // O₂-Rohr (−z, blassweiß)
+      add(C(.16,.16,1.0,0xe6f0ff,{metalness:.5,roughness:.3,emissive:0x6a8aa0,emissiveIntensity:.45}),0,.2,-1.0,Math.PI/2);
+      add(CO(.12,.24,0xe6f0ff,{emissive:0x6a8aa0,emissiveIntensity:1},4),0,.38,-1.4,-Math.PI/2); indY=.9; break;
     case "furnace": // Tiegel mit glühender Schmelze + Elektroden
       add(C(.36,.3,.46,0x6b3a24,{roughness:.85}),0,.25,0);
       add(C(.31,.31,.07,0xff5a00,{emissive:0xff4400,emissiveIntensity:1.3}),0,.5,0);
@@ -491,12 +495,11 @@ function spawnOut(b,type){ const opts=perimeter(b); const n=opts.length; if(!n) 
   for(let i=0;i<n;i++){ const o=opts[(b._rr+i)%n]; if(tryDeposit(type,o[0],o[1],o[2],o[3])){ b._rr=(b._rr+i+1)%n; return true; } }
   return false;
 }
-// Elektrolyseur: 2 gegenüberliegende Seiten geben H₂, die anderen 2 geben O₂ (relativ zur Ausrichtung).
+// Elektrolyseur (3 Felder): H₂ verlässt das vordere Rohr (+dir), O₂ das hintere Rohr (−dir).
 function electroEmit(b){
-  for(let s=0;s<4;s++){
-    const isH2 = (s===b.dir || s===(b.dir+2)%4); const type=isH2?"h2":"o2"; const key=isH2?"h2Buf":"o2Buf";
-    if((b[key]||0)>0){ const nx=b.x+DIRS[s][0], nz=b.z+DIRS[s][1]; if(tryDeposit(type,nx,nz,b.x,b.z)) b[key]--; }
-  }
+  const d=b.dir, o=(d+2)%4;
+  if((b.h2Buf||0)>0){ const cx=b.x+DIRS[d][0], cz=b.z+DIRS[d][1]; if(tryDeposit("h2", cx+DIRS[d][0], cz+DIRS[d][1], cx, cz)) b.h2Buf--; }
+  if((b.o2Buf||0)>0){ const cx=b.x+DIRS[o][0], cz=b.z+DIRS[o][1]; if(tryDeposit("o2", cx+DIRS[o][0], cz+DIRS[o][1], cx, cz)) b.o2Buf--; }
 }
 
 function moveItems(dt){
@@ -608,8 +611,8 @@ function statusOf(b){
   if(SOURCES[b.kind]){ if(b.outBuf>0) return ["Ausgang voll",0xffd24a]; return ["läuft",0x44ff88]; }
   if(RECIPES[b.kind]){
     if(b.outBuf>0) return ["Ausgang voll",0xffd24a];
-    if(!hasInputs(b)) return ["wartet auf Material",0xff5d6c];
-    if(!hasSupplies(b)) return ["Vorrat leer",0xff5d6c];
+    if(!hasInputs(b)){ const r=RECIPES[b.kind], miss=[]; for(const key in r.in) if((b.buf[key]||0)<r.in[key]) miss.push(ITEMS[key].name); return ["wartet auf "+miss.join(" + "),0xff5d6c]; }
+    if(!hasSupplies(b)){ const r=RECIPES[b.kind], miss=[]; for(const key in r.sup) if(SUP[key].stock<r.sup[key]) miss.push(SUP[key].name); return ["Vorrat leer: "+miss.join(", "),0xff5d6c]; }
     return ["läuft",0x44ff88];
   }
   if(b.kind==="seller") return ["bereit",0x44ff88];
@@ -624,7 +627,10 @@ function updateIndicators(){
 }
 
 /* ===================== BAUEN / ABREISSEN ===================== */
-function cellsFor(kind,x,z){ const sz=DEF[kind].size||[1,1]; const c=[]; for(let i=0;i<sz[0];i++)for(let j=0;j<sz[1];j++)c.push([x+i,z+j]); return c; }
+function cellsFor(kind,x,z){
+  if(kind==="electrolyseur"){ const f=DIRS[placeDir], b=DIRS[(placeDir+2)%4]; return [[x,z],[x+f[0],z+f[1]],[x+b[0],z+b[1]]]; } // Kern + H₂-Rohr vorne + O₂-Rohr hinten
+  const sz=DEF[kind].size||[1,1]; const c=[]; for(let i=0;i<sz[0];i++)for(let j=0;j<sz[1];j++)c.push([x+i,z+j]); return c;
+}
 function place(kind,x,z,free){
   const cells=cellsFor(kind,x,z);
   for(const [cx,cz] of cells){ if(!inBounds(cx,cz)) return false; }
@@ -639,7 +645,10 @@ function place(kind,x,z,free){
   }
   const sz=DEF[kind].size||[1,1];
   const mesh = makeMesh(kind,placeDir);
-  const cwx=(x+(sz[0]-1)/2 - HALF)*S, cwz=(z+(sz[1]-1)/2 - HALF)*S; mesh.position.set(cwx,0,cwz); scene.add(mesh);
+  let cwx,cwz;
+  if(kind==="electrolyseur"){ [cwx,cwz]=tileToWorld(x,z); } // Kern (Mitte der 3er-Reihe)
+  else { cwx=(x+(sz[0]-1)/2 - HALF)*S; cwz=(z+(sz[1]-1)/2 - HALF)*S; }
+  mesh.position.set(cwx,0,cwz); scene.add(mesh);
   const b = {kind,x,z,dir:placeDir,cells,mesh,t:0,buf:{},outBuf:0,outType:null,want:false,stored:0,powered:false,wired:false,fixed:!!free};
   for(const [cx,cz] of cells) grid_.set(k(cx,cz),b);
   if(kind!=="belt" && kind!=="pipe" && kind!=="cable"){ const lab=document.createElement('div'); lab.className="blabel"; document.getElementById('labels').appendChild(lab); b.labelEl=lab; }
@@ -767,7 +776,7 @@ const WHY = {
   solar:"Günstige Stromquelle für den Start — liefert aber nur tagsüber. Kombiniere sie mit Energiespeichern.",
   pump:"Fördert Wasser in Rohre. Wasser brauchen Elektrolyseur, Wafer-Werk und Fab. Braucht selbst Strom.",
   battery:"Speichert überschüssigen Solarstrom tagsüber und gibt ihn nachts wieder ab.",
-  electrolyseur:"Spaltet Wasser per Elektrolyse in Wasserstoff (H₂) und Sauerstoff (O₂) — gibt H₂ an 2 Seiten und O₂ an 2 Seiten in Rohre ab. Sehr stromhungrig.",
+  electrolyseur:"Spaltet Wasser per Elektrolyse in Wasserstoff (H₂) und Sauerstoff (O₂). Belegt 3 Felder mit fest verbauten Rohren: H₂ vorne, O₂ hinten. Wasser seitlich zuführen. Sehr stromhungrig.",
   nuclear:"Liefert sehr viel Strom rund um die Uhr — sehr teuer und groß (6 Felder). Lohnt sich erst spät; starte lieber mit Solar + Speicher.",
   furnace:"Erster Verarbeitungsschritt: macht aus Sand und Kohle Rohsilizium.",
   siemens:"Reinigt das Silizium chemisch zu Reinst-Silizium.",
@@ -789,7 +798,7 @@ function infoHTML(kind){
   if(d.powerGen) prod.push(d.powerGen+" ⚡"+(kind==="solar"?" (tagsüber)":kind==="nuclear"?" (24/7)":""));
   if(d.powerCap) prod.push("speichert "+d.powerCap+" ⚡");
   if(kind==="seller") prod.push("+"+CHIP_PRICE+" 💵 pro Chip");
-  const fp=d.size?` · belegt ${d.size[0]*d.size[1]} Felder (${d.size[0]}×${d.size[1]})`:"";
+  const fp=d.size?` · belegt ${d.size[0]*d.size[1]} Felder (${d.size[0]}×${d.size[1]})`:(kind==="electrolyseur"?" · belegt 3 Felder (H₂- & O₂-Rohr fest verbaut)":"");
   return `<h3>${d.ic} ${d.name}</h3>`+
     `<div class="cost">${kind==="delete"?"":d.cost+" 💵"}${fp}</div>`+
     `<p>${WHY[kind]||""}</p>`+
@@ -853,7 +862,7 @@ function labelHTML(b){
   const d=DEF[b.kind]; let out=`<span class="t">${d.ic} ${d.name}</span>`;
   if(b.kind==="solar") out+=`<br><span class="p">+${d.powerGen} ⚡ Strom (tagsüber)</span>`;
   else if(b.kind==="nuclear") out+=`<br><span class="p">+${d.powerGen} ⚡ Strom (24/7)</span>`;
-  else if(b.kind==="electrolyseur") out+=`<br><span class="p">→ H₂ (2 Seiten) · O₂ (2 Seiten)</span><br><span class="u">braucht Wasser · -${d.powerUse} ⚡</span>`;
+  else if(b.kind==="electrolyseur") out+=`<br><span class="p">→ H₂ (vorne) · O₂ (hinten)</span><br><span class="u">braucht Wasser · -${d.powerUse} ⚡</span>`;
   else if(SOURCES[b.kind]) out+=`<br><span class="p">→ ${ITEMS[SOURCES[b.kind].out].name}</span><br><span class="u">-${d.powerUse} ⚡</span>`;
   else if(RECIPES[b.kind]){ const r=RECIPES[b.kind];
     out+=`<br><span class="p">→ ${ITEMS[r.out].name}${r.outCount?(" ×"+r.outCount):""}</span>`;
@@ -865,8 +874,8 @@ function labelHTML(b){
   if(st==="nicht verbunden") out+=`<br><span class="w">🔌 nicht ans Stromnetz angeschlossen</span>`;
   else if(st==="kein Strom"){ const def=Math.max(0,game.powerDemand-game.powerGen); out+=`<br><span class="w">⚠ Strom fehlt${def?` −${def} ⚡`:""}</span>`; }
   else if(st==="wartet auf Wasser") out+=`<br><span class="w">💧 wartet auf Wasser (Rohr von Pumpe legen)</span>`;
-  else if(st==="Vorrat leer") out+=`<br><span class="w">⚠ Vorrat leer</span>`;
-  else if(st==="wartet auf Material") out+=`<br><span class="s">… wartet auf Material</span>`;
+  else if(st.startsWith("Vorrat leer")) out+=`<br><span class="w">⚠ ${st}</span>`;
+  else if(st.startsWith("wartet auf")) out+=`<br><span class="w">… ${st}</span>`;
   else if(st==="Ausgang voll") out+=`<br><span class="s">Ausgang voll</span>`;
   return out;
 }
@@ -898,8 +907,8 @@ function nextTip(){
   if(cnt("seller")===0) return "🚚 Baue einen <b>Versand</b> und leite die Chips dorthin — so verdienst du Geld.";
   const dry=buildings.find(b=>b.kind==="electrolyseur" && statusOf(b)[0]==="wartet auf Wasser");
   if(dry) return "💧 Dein <b>Elektrolyseur</b> bekommt kein Wasser — verlege ein 🚰 <b>Rohr</b> von einer Wasserpumpe zu ihm.";
-  const waiting=buildings.find(b=>RECIPES[b.kind] && statusOf(b)[0]==="wartet auf Material");
-  if(waiting) return "➤ Der/die <b>"+DEF[waiting.kind].name+"</b> wartet auf Nachschub — verbinde Feststoffe per ➤ Förderband und Wasser/Gase per 🚰 Rohr lückenlos.";
+  const waiting=buildings.find(b=>RECIPES[b.kind] && b.kind!=="electrolyseur" && statusOf(b)[0].startsWith("wartet"));
+  if(waiting) return "➤ <b>"+DEF[waiting.kind].name+"</b> "+statusOf(waiting)[0]+" — verbinde Feststoffe per ➤ Förderband, Wasser/Gase per 🚰 Rohr. (H₂/O₂ kommen aus dem 💠 Elektrolyseur.)";
   if(game.powerCap===0) return "🔋 Tipp: Ein <b>Energiespeicher</b> hält deine Fabrik nachts am Laufen, wenn Solar pausiert.";
   if(game.money<150) return "💵 Dein Geld wird knapp — sorge dafür, dass mehr Chips beim Versand ankommen.";
   return "✅ Sieht gut aus! Erweitere die Produktion und puffere mit 🔋 Energiespeicher / 🛢️ Wassertank gegen die Nacht.";
