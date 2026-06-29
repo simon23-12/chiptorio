@@ -78,6 +78,8 @@
   button.big{font-family:var(--sans);font-weight:700;font-size:15px;cursor:pointer;border:1px solid var(--acc);
     background:#0c2b27;color:var(--acc);padding:12px 30px;border-radius:10px;margin-top:10px}
   button.big:hover{background:var(--acc);color:#04231f}
+  #start-hard{border-color:var(--bad);color:var(--bad);background:#2b0c10}
+  #start-hard:hover{background:var(--bad);color:#240609}
   .hide{display:none!important}
   kbd{font-family:var(--mono);background:#16223a;border:1px solid #2a3a5a;border-radius:4px;padding:1px 6px;font-size:11px}
   #toast{position:fixed;top:54px;left:50%;transform:translateX(-50%);z-index:40;display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none}
@@ -133,10 +135,15 @@
   <h1>🏭 Fabrik bauen</h1>
   <p style="color:var(--dim);max-width:560px;margin:0">Baue die Lieferkette vom Quarzsand bis zum fertigen Chip. Verbinde die Maschinen mit Förderbändern und halte Strom, Wasser, Rohstoffe und Geld im Gleichgewicht.</p>
   <div class="chain" id="chaintext"></div>
-  <p class="ctrl"><b>Steuerung:</b> &nbsp;<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> bewegen · <kbd>R</kbd> Ansicht 90° drehen · <kbd>Mausrad</kbd> zoomen · <kbd>Ziehen</kbd> Kamera drehen<br>
+  <p class="ctrl"><b>Steuerung:</b> &nbsp;<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> bewegen · <kbd>,</kbd> <kbd>.</kbd> Sicht flüssig drehen · <kbd>R</kbd> Ansicht 90° · <kbd>Mausrad</kbd> zoomen · <kbd>Ziehen</kbd> Kamera drehen<br>
   <kbd>Linksklick</kbd> bauen · Förderband/Abriss <kbd>ziehen</kbd> zum Verlegen · <kbd>Q</kbd> Bauteil drehen · <kbd>Rechtsklick</kbd> abreißen · <kbd>i</kbd> Infos · <kbd>T</kbd> Tipp<br>
   <b style="color:var(--orange)">Hinweis:</b> Bauteile wählst du per <b>Mausklick</b>. Feststoffe laufen über ➤ <b>Förderbänder</b>, Wasser &amp; Gase über 🚰 <b>Rohre</b>, Strom über 🔌 <b>Kabel</b>. Maschinen geben Material an <b>allen 4 Seiten</b> aus. Wasserstoff &amp; Sauerstoff stellst du im 💠 <b>Elektrolyseur</b> aus Wasser her.</p>
-  <button class="big" id="startbtn">▶ Fabrik starten</button>
+  <div style="font-family:var(--mono);font-size:12px;color:var(--dim);letter-spacing:2px;margin-top:4px">SCHWIERIGKEIT WÄHLEN</div>
+  <div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:6px">
+    <button class="big" id="start-easy">🟢 Einfach</button>
+    <button class="big" id="start-hard">🔴 Schwer</button>
+  </div>
+  <p style="font-size:12px;color:var(--dim);max-width:540px;margin-top:8px"><b>Einfach:</b> entspannter Aufbau (der aktuelle Modus). &nbsp;<b>Schwer:</b> anspruchsvoller — wird gerade gebaut, startet vorerst wie „Einfach".</p>
 </div>
 
 <script type="importmap">
@@ -234,7 +241,7 @@ const KEYMAP = {}; // Bauteile werden per Mausklick in der Leiste gewählt — k
 
 const DAYLEN = 100; // Sekunden pro Tag/Nacht-Zyklus
 const game = { money:5500, chips:0, powerGen:0, powerDemand:0, powerOK:true, rate:0, soldWindow:[],
-  storedPower:0, powerCap:0, timeOfDay:0.33, sun:1, speed:1 };
+  storedPower:0, powerCap:0, timeOfDay:0.33, sun:1, speed:1, difficulty:'easy' };
 
 /* ===================== THREE SETUP ===================== */
 const renderer = new THREE.WebGLRenderer({antialias:true});
@@ -743,6 +750,10 @@ window.addEventListener('pointerup',e=>{
 dom.addEventListener('contextmenu',e=>{ e.preventDefault(); const t=pickTile(e); if(t) removeAt(t.x,t.z); });
 const _yAxis=new THREE.Vector3(0,1,0);
 function rotateView(deg){ const off=camera.position.clone().sub(controls.target); off.applyAxisAngle(_yAxis, deg*Math.PI/180); camera.position.copy(controls.target).add(off); }
+function rotateSmooth(dt){ // , und . drehen die Sicht flüssig
+  let d=0; if(pressed[','])d+=1; if(pressed['.'])d-=1; if(!d) return;
+  const off=camera.position.clone().sub(controls.target); off.applyAxisAngle(_yAxis, d*1.5*dt); camera.position.copy(controls.target).add(off);
+}
 function panCamera(dt){
   let mx=0,mz=0;
   if(pressed['w'])mz-=1; if(pressed['s'])mz+=1; if(pressed['a'])mx-=1; if(pressed['d'])mx+=1;
@@ -756,7 +767,7 @@ function panCamera(dt){
 }
 addEventListener('keydown',e=>{
   const key=e.key.toLowerCase();
-  if(key==="w"||key==="a"||key==="s"||key==="d"){ pressed[key]=true; return; }
+  if(key==="w"||key==="a"||key==="s"||key==="d"||key===","||key==="."){ pressed[key]=true; return; }
   if(key==="r"){ rotateView(90); }
   else if(key==="q"){ placeDir=(placeDir+1)%4; updateGhost(); }
   else if(key==="i"){ labelsOn=!labelsOn; updateLabels(); toast(labelsOn?"Gebäude-Infos: AN (i)":"Gebäude-Infos: AUS (i)",0x34e0c0); }
@@ -983,7 +994,7 @@ function loop(){
   // Belt-Pfeile pulsieren
   const pulse=.6+.4*Math.sin(performance.now()*.006);
   for(const b of buildings){ if((b.kind==="belt"||b.kind==="pipe")&&b.mesh.userData.arrow) b.mesh.userData.arrow.material.emissiveIntensity=pulse; }
-  panCamera(dt);
+  panCamera(dt); rotateSmooth(dt);
   controls.update();
   renderer.render(scene,camera);
 }
@@ -1022,7 +1033,7 @@ function scatterResources(){
 /* ===================== SPEICHERN / LADEN ===================== */
 function saveGame(){
   try{
-    const data={ v:1, money:game.money, chips:game.chips, timeOfDay:game.timeOfDay,
+    const data={ v:1, money:game.money, chips:game.chips, timeOfDay:game.timeOfDay, difficulty:game.difficulty,
       autobuy:document.getElementById('autobuy').checked,
       sup:Object.fromEntries(Object.keys(SUP).map(kk=>[kk,SUP[kk].stock])),
       buildings:buildings.map(b=>({kind:b.kind,x:b.x,z:b.z,dir:b.dir,fixed:!!b.fixed,buf:b.buf,outBuf:b.outBuf,outType:b.outType,stored:b.stored,h2Buf:b.h2Buf||0,o2Buf:b.o2Buf||0,t:b.t})),
@@ -1044,7 +1055,7 @@ function clearFactory(){
 function loadGame(d){
   if(!d||!Array.isArray(d.buildings)) return false;
   clearFactory();
-  for(const sb of d.buildings){ placeDir=sb.dir||1;
+  for(const sb of d.buildings){ placeDir=(sb.dir==null?1:sb.dir); // 0 (Nord) NICHT als falsy behandeln!
     if(place(sb.kind,sb.x,sb.z,true)){ const nb=grid_.get(k(sb.x,sb.z)); if(nb){
       nb.buf=sb.buf||{}; nb.outBuf=sb.outBuf||0; nb.outType=sb.outType||null; nb.stored=sb.stored||0;
       nb.h2Buf=sb.h2Buf||0; nb.o2Buf=sb.o2Buf||0; nb.t=sb.t||0; nb.fixed=!!sb.fixed;
@@ -1052,13 +1063,14 @@ function loadGame(d){
     } } }
   placeDir=1;
   for(const si of (d.items||[])){ const t=grid_.get(k(si.x,si.z)); if(t&&(t.kind==="belt"||t.kind==="pipe")) makeItem(si.type,si.x,si.z,si.prog); }
-  game.money=(d.money!=null?d.money:game.money); game.chips=d.chips||0; game.timeOfDay=d.timeOfDay||0.33; game.speed=1; game.soldWindow=[];
+  game.money=(d.money!=null?d.money:game.money); game.chips=d.chips||0; game.timeOfDay=d.timeOfDay||0.33; game.speed=1; game.soldWindow=[]; game.difficulty=d.difficulty||'easy';
   for(const kk in SUP){ if(d.sup && d.sup[kk]!=null) SUP[kk].stock=d.sup[kk]; }
   const ab=document.getElementById('autobuy'); if(ab && d.autobuy!=null) ab.checked=d.autobuy;
   document.querySelectorAll('#speedctl .spd').forEach(e=>e.classList.toggle('sel', e.dataset.s==='1'));
+  setModeTitle();
   document.getElementById('intro').classList.add('hide'); started=true;
   if(typeof musicOn!=="undefined" && musicOn) playTrack();
-  toast("📂 Spielstand geladen.",0x34e0c0);
+  toast("📂 Spielstand geladen ("+(game.difficulty==='hard'?"Schwer":"Einfach")+").",0x34e0c0);
   return true;
 }
 
@@ -1080,7 +1092,11 @@ document.getElementById('save-btn').onclick=()=>saveGame();
 document.getElementById('load-btn').onclick=()=>document.getElementById('load-file').click();
 document.getElementById('load-file').onchange=e=>{ const f=e.target.files[0]; e.target.value=""; if(!f) return;
   const r=new FileReader(); r.onload=()=>{ try{ if(!loadGame(JSON.parse(r.result))) toast("Ungültige Spielstand-Datei.",0xff5d6c); }catch(err){ toast("Ungültige Spielstand-Datei.",0xff5d6c); } }; r.readAsText(f); };
-document.getElementById('startbtn').onclick=()=>{ document.getElementById('intro').classList.add('hide'); started=true; if(musicOn) playTrack(); toast("Sand, Kohle & Wasser liegen schon auf der Karte ✦ baue ☀️ Solar, verlege 🔌 Kabel & ➤ Bänder. Taste T = Tipp.",0x34e0c0); };
+function setModeTitle(){ document.getElementById('title').textContent="CHIPTORIO · "+(game.difficulty==='hard'?"SCHWER":"EINFACH"); }
+function startFactory(diff){ game.difficulty=diff; setModeTitle(); document.getElementById('intro').classList.add('hide'); started=true; if(musicOn) playTrack();
+  toast((diff==='hard'?"🔴 Schwer":"🟢 Einfach")+" — Sand, Kohle & Wasser liegen auf der Karte. Baue ☀️ Solar, verlege 🔌 Kabel & ➤ Bänder. Taste T = Tipp.",0x34e0c0); }
+document.getElementById('start-easy').onclick=()=>startFactory('easy');
+document.getElementById('start-hard').onclick=()=>startFactory('hard');
 
 /* Laden (aus dem Hauptmenü) oder frische Karte erzeugen */
 const _loadData=sessionStorage.getItem('chiptorio-loaddata');
