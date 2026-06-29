@@ -28,10 +28,11 @@
   #speedctl{gap:4px}
   .spd{cursor:pointer;font-family:var(--mono);font-size:11px;color:var(--dim);padding:2px 6px;border-radius:6px;border:1px solid transparent}
   .spd:hover{color:var(--txt)} .spd.sel{background:#0c2b27;border-color:var(--acc);color:var(--acc)}
-  #back,#music-btn,#save-btn{pointer-events:auto;font-family:var(--sans);font-weight:600;font-size:12px;cursor:pointer;
+  #back,#music-btn,#save-btn,#load-btn{pointer-events:auto;font-family:var(--sans);font-weight:600;font-size:12px;cursor:pointer;
     border:1px solid #33486e;background:transparent;color:var(--dim);padding:7px 12px;border-radius:9px}
-  #back:hover,#music-btn:hover,#save-btn:hover{background:#16223a;color:var(--txt)}
+  #back:hover,#music-btn:hover,#save-btn:hover,#load-btn:hover{background:#16223a;color:var(--txt)}
   #save-btn{border-color:#2c6e4a;color:var(--good)}
+  #load-btn{border-color:#2c5a7e;color:var(--acc2)}
   #music-btn{padding:7px 10px}
   #title{font-family:var(--mono);font-weight:700;letter-spacing:2px;color:var(--orange);font-size:14px;margin-right:4px}
 
@@ -99,7 +100,9 @@
 <div id="ui">
   <div id="top">
     <button id="back">← Hauptmenü</button>
-    <button id="save-btn" title="Spiel speichern">💾 Speichern</button>
+    <button id="save-btn" title="Spielstand als Datei herunterladen">💾 Speichern</button>
+    <button id="load-btn" title="Spielstand-Datei laden">📂 Laden</button>
+    <input type="file" id="load-file" accept="application/json,.json" style="display:none">
     <button id="music-btn" class="ghost" title="Musik an/aus">🔊</button>
     <span id="title">CHIPTORIO · FABRIK</span>
     <div class="stat"><span class="lbl">GELD</span><b id="s-money" style="color:var(--good)">—</b></div>
@@ -188,6 +191,7 @@ const DEF = {
   belt:      {name:"Förderband", ic:"➤", cost:5,   col:0x2b3a52, cat:"Logistik"},
   pipe:      {name:"Rohr", ic:"🚰", cost:5, col:0x2a6a8a, cat:"Logistik"},
   cable:     {name:"Stromkabel", ic:"🔌", cost:4, col:0x4a4426, cat:"Logistik"},
+  gastank:   {name:"Gastank", ic:"🛢️", cost:120, col:0x6f6636, cat:"Logistik"},
   sandmine:  {name:"Sandgrube", ic:"⛏️", cost:80,  col:0x6b5a3a, powerUse:3,  cat:"Rohstoff"},
   coalmine:  {name:"Kohlemine", ic:"⚫", cost:90,  col:0x3a3a3a, powerUse:3,  cat:"Rohstoff"},
   pump:      {name:"Wasserpumpe", ic:"💧", cost:120, col:0x2a8fb0, powerUse:6, cat:"Rohstoff"},
@@ -224,7 +228,8 @@ const RECIPES = {
 };
 const CHIP_PRICE = 155;
 // Sandgrube/Kohlemine/Wasserpumpe sind NICHT baubar — sie werden beim Start zufällig auf der Karte verteilt.
-const TOOLS = ["belt","pipe","cable","solar","battery","nuclear","electrolyseur","furnace","siemens","crystal","waferplant","fab","packaging","seller","delete"];
+const TOOLS = ["belt","pipe","cable","solar","battery","nuclear","electrolyseur","gastank","furnace","siemens","crystal","waferplant","fab","packaging","seller","delete"];
+const GAS_CAP = 2000; // Gastank-Kapazität je Gas (sehr groß = "Abfluss")
 const KEYMAP = {}; // Bauteile werden per Mausklick in der Leiste gewählt — keine Hotkeys (Tasten gehören der Navigation)
 
 const DAYLEN = 100; // Sekunden pro Tag/Nacht-Zyklus
@@ -338,6 +343,11 @@ function makeMesh(kind,dir){
       // O₂-Rohr (−z, blassweiß)
       add(C(.16,.16,1.0,0xe6f0ff,{metalness:.5,roughness:.3,emissive:0x6a8aa0,emissiveIntensity:.45}),0,.2,-1.0,Math.PI/2);
       add(CO(.12,.24,0xe6f0ff,{emissive:0x6a8aa0,emissiveIntensity:1},4),0,.38,-1.4,-Math.PI/2); indY=.9; break;
+    case "gastank": // Gas-Puffer: großer Drucktank mit Glaskuppel
+      add(C(.34,.36,.72,0x6f6636,{metalness:.5,roughness:.4}),0,.38,0);
+      add(C(.36,.36,.08,0x8a7d3a),0,.74,0);
+      add(SP(.34,0x9fe8ff,{transparent:true,opacity:.22,emissive:0x2c7a90,emissiveIntensity:.35}),0,.76,0);
+      add(B(.12,.22,.05,0xe6f0ff,{emissive:0x6a8aa0,emissiveIntensity:.4}),0,.42,.35); indY=1.0; break;
     case "furnace": // Tiegel mit glühender Schmelze + Elektroden
       add(C(.36,.3,.46,0x6b3a24,{roughness:.85}),0,.25,0);
       add(C(.31,.31,.07,0xff5a00,{emissive:0xff4400,emissiveIntensity:1.3}),0,.5,0);
@@ -482,6 +492,7 @@ function tryDeposit(type,nx,nz,fx,fz){
     makeItem(type,nx,nz,0.05); return true;
   }
   if(RECIPES[nb.kind] && machineAccepts(nb,type)){ nb.buf[type]=(nb.buf[type]||0)+1; return true; }
+  if(nb.kind==="gastank" && isFluid(type) && (nb.buf[type]||0)<GAS_CAP){ nb.buf[type]=(nb.buf[type]||0)+1; return true; }
   if(nb.kind==="seller" && type==="chip"){ sellChip(); return true; }
   return false;
 }
@@ -494,6 +505,17 @@ function spawnOut(b,type){ const opts=perimeter(b); const n=opts.length; if(!n) 
   b._rr=b._rr||0;
   for(let i=0;i<n;i++){ const o=opts[(b._rr+i)%n]; if(tryDeposit(type,o[0],o[1],o[2],o[3])){ b._rr=(b._rr+i+1)%n; return true; } }
   return false;
+}
+// Gastank: gibt gespeicherte Gase an angeschlossene Rohre/Verbraucher ab (nicht an andere Tanks).
+function tankEmit(b){
+  const opts=perimeter(b); if(!opts.length) return; b._rr=b._rr||0;
+  for(const type of ["h2","o2","water"]){
+    if((b.buf[type]||0)<=0) continue;
+    for(let i=0;i<opts.length;i++){ const o=opts[(b._rr+i)%opts.length]; const nb=grid_.get(k(o[0],o[1]));
+      if(!nb || nb.kind==="gastank") continue;
+      if(tryDeposit(type,o[0],o[1],o[2],o[3])){ b.buf[type]--; b._rr=(b._rr+i+1)%opts.length; break; }
+    }
+  }
 }
 // Elektrolyseur (3 Felder): H₂ verlässt das vordere Rohr (+dir), O₂ das hintere Rohr (−dir).
 function electroEmit(b){
@@ -516,6 +538,7 @@ function moveItems(dt){
       const nx=it.x+d[0], nz=it.z+d[1]; const nb=grid_.get(k(nx,nz));
       if(nb && (nb.kind==="belt"||nb.kind==="pipe") && carrierOk(nb,it.type) && !occupiedStart(nx,nz)){ it.x=nx; it.z=nz; it.prog=0.0; }
       else if(nb && RECIPES[nb.kind] && machineAccepts(nb,it.type)){ nb.buf[it.type]=(nb.buf[it.type]||0)+1; it._dead=true; scene.remove(it.mesh); continue; }
+      else if(nb && nb.kind==="gastank" && isFluid(it.type) && (nb.buf[it.type]||0)<GAS_CAP){ nb.buf[it.type]=(nb.buf[it.type]||0)+1; it._dead=true; scene.remove(it.mesh); continue; }
       else if(nb && nb.kind==="seller" && it.type==="chip"){ sellChip(); it._dead=true; scene.remove(it.mesh); continue; }
       else it.prog=1.0;
     } else it.prog=np;
@@ -578,6 +601,8 @@ function tickWork(dt){
       const powered = !DEF[b.kind].powerUse || b.powered;
       if(b.outBuf>0){ if(spawnOut(b,s.out)) b.outBuf=0; }
       else if(powered){ b.t+=dt; if(b.t>=s.time){ b.t=0; if(!spawnOut(b,s.out)) b.outBuf=1; } }
+    } else if(b.kind==="gastank"){
+      tankEmit(b);
     } else if(b.kind==="electrolyseur"){
       electroEmit(b);
       const r=RECIPES.electrolyseur;
@@ -608,6 +633,7 @@ function statusOf(b){
   const d=DEF[b.kind];
   if(d.powerUse && !b.powered) return b.wired?["kein Strom",0xff5d6c]:["nicht verbunden",0xff5d6c];
   if(b.kind==="electrolyseur"){ if((b.h2Buf||0)>0||(b.o2Buf||0)>0) return ["gibt H₂/O₂ ab",0x44ff88]; if((b.buf.water||0)>=2) return ["läuft",0x44ff88]; return ["wartet auf Wasser",0xff5d6c]; }
+  if(b.kind==="gastank"){ return ["🛢️ H₂ "+Math.round(b.buf.h2||0)+" · O₂ "+Math.round(b.buf.o2||0)+((b.buf.water|0)?(" · 💧"+Math.round(b.buf.water)):""),0x44ff88]; }
   if(SOURCES[b.kind]){ if(b.outBuf>0) return ["Ausgang voll",0xffd24a]; return ["läuft",0x44ff88]; }
   if(RECIPES[b.kind]){
     if(b.outBuf>0) return ["Ausgang voll",0xffd24a];
@@ -771,6 +797,7 @@ const WHY = {
   belt:"Transportiert feste Rohstoffe und Zwischenprodukte (Sand … Chip) zwischen Gebäuden. Braucht keinen Strom.",
   pipe:"Transportiert Flüssigkeiten & Gase (Wasser, H₂, O₂) zwischen Gebäuden — analog zum Förderband. Braucht keinen Strom.",
   cable:"Verteilt Strom. JEDES Gebäude, das Strom braucht, muss per Kabel mit einem Kraftwerk verbunden sein — Bänder & Rohre nicht.",
+  gastank:"Großer Puffer für Gase (H₂ & O₂). Nimmt überschüssiges Gas auf, damit der Elektrolyseur weiterläuft, auch wenn ein Gas gerade nicht gebraucht wird — und gibt es bei Bedarf wieder ab. Braucht keinen Strom, nur 1 Feld.",
   sandmine:"Liefert Quarzsand — den Grundrohstoff der gesamten Chip-Produktion.",
   coalmine:"Liefert Kohle, die der Lichtbogenofen zusammen mit Sand benötigt.",
   solar:"Günstige Stromquelle für den Start — liefert aber nur tagsüber. Kombiniere sie mit Energiespeichern.",
@@ -792,7 +819,8 @@ function infoHTML(kind){
   let cons=[]; if(d.powerUse)cons.push(d.powerUse+" ⚡");
   if(RECIPES[kind]){ for(const key in RECIPES[kind].in)cons.push(ITEMS[key].name); for(const key in RECIPES[kind].sup)cons.push(SUP[key].name); }
   let prod=[];
-  if(kind==="electrolyseur") prod.push("Wasserstoff (H₂) ×2 · Sauerstoff (O₂)");
+  if(kind==="gastank") prod.push("puffert H₂ & O₂ (Abfluss für den Elektrolyseur)");
+  else if(kind==="electrolyseur") prod.push("Wasserstoff (H₂) ×2 · Sauerstoff (O₂)");
   else if(RECIPES[kind] && RECIPES[kind].out) prod.push(ITEMS[RECIPES[kind].out].name+(RECIPES[kind].outCount?(" ×"+RECIPES[kind].outCount):""));
   else if(SOURCES[kind]) prod.push(ITEMS[SOURCES[kind].out].name);
   if(d.powerGen) prod.push(d.powerGen+" ⚡"+(kind==="solar"?" (tagsüber)":kind==="nuclear"?" (24/7)":""));
@@ -847,7 +875,7 @@ function toast(msg,col=0xffb454){
 function updateHUD(){
   document.getElementById('s-money').textContent = Math.floor(game.money)+" 💵";
   document.getElementById('s-money').style.color = game.money<200?"var(--bad)":"var(--good)";
-  const ps=document.getElementById('s-power'); ps.innerHTML=`${Math.round(game.powerGen)} erzeugt · ${Math.round(game.powerDemand)} benötigt`+(game.powerCap>0?` · <span style="color:#46d97e">🔋 ${Math.round(game.storedPower)}/${game.powerCap}</span>`:""); ps.style.color=game.powerOK?"var(--good)":"var(--bad)";
+  const ps=document.getElementById('s-power'); ps.innerHTML=`${Math.round(game.powerGen)} erzeugt · ${Math.round(game.powerDemand)} benötigt`+(game.powerCap>0?` · <span style="color:#46d97e">🔋 ${Math.round(game.storedPower)}/${game.powerCap}</span>`:""); ps.style.color=(game.powerGen>=game.powerDemand)?"var(--good)":"var(--bad)";
   document.getElementById('s-chips').textContent=game.chips;
   // Verkaufsrate /min
   const now=performance.now(); game.soldWindow=game.soldWindow.filter(t=>now-t<60000);
@@ -863,6 +891,7 @@ function labelHTML(b){
   if(b.kind==="solar") out+=`<br><span class="p">+${d.powerGen} ⚡ Strom (tagsüber)</span>`;
   else if(b.kind==="nuclear") out+=`<br><span class="p">+${d.powerGen} ⚡ Strom (24/7)</span>`;
   else if(b.kind==="electrolyseur") out+=`<br><span class="p">→ H₂ (vorne) · O₂ (hinten)</span><br><span class="u">braucht Wasser · -${d.powerUse} ⚡</span>`;
+  else if(b.kind==="gastank") out+=`<br><span class="p">Gas-Puffer</span><br><span class="u">H₂ ${Math.round(b.buf.h2||0)} · O₂ ${Math.round(b.buf.o2||0)} / ${GAS_CAP}</span>`;
   else if(SOURCES[b.kind]) out+=`<br><span class="p">→ ${ITEMS[SOURCES[b.kind].out].name}</span><br><span class="u">-${d.powerUse} ⚡</span>`;
   else if(RECIPES[b.kind]){ const r=RECIPES[b.kind];
     out+=`<br><span class="p">→ ${ITEMS[r.out].name}${r.outCount?(" ×"+r.outCount):""}</span>`;
@@ -978,7 +1007,6 @@ function scatterResources(){
 }
 
 /* ===================== SPEICHERN / LADEN ===================== */
-const SAVE_KEY="chiptorio-save";
 function saveGame(){
   try{
     const data={ v:1, money:game.money, chips:game.chips, timeOfDay:game.timeOfDay,
@@ -986,8 +1014,12 @@ function saveGame(){
       sup:Object.fromEntries(Object.keys(SUP).map(kk=>[kk,SUP[kk].stock])),
       buildings:buildings.map(b=>({kind:b.kind,x:b.x,z:b.z,dir:b.dir,fixed:!!b.fixed,buf:b.buf,outBuf:b.outBuf,outType:b.outType,stored:b.stored,h2Buf:b.h2Buf||0,o2Buf:b.o2Buf||0,t:b.t})),
       items:items.filter(i=>!i._dead).map(i=>({type:i.type,x:i.x,z:i.z,prog:i.prog})) };
-    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
-    toast("💾 Spiel gespeichert.",0x34e0c0);
+    const blob=new Blob([JSON.stringify(data)],{type:"application/json"});
+    const url=URL.createObjectURL(blob); const a=document.createElement('a');
+    const ts=new Date().toISOString().slice(0,16).replace(/[:T]/g,"-");
+    a.href=url; a.download="chiptorio-fabrik-"+ts+".json"; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    toast("💾 Spielstand als Datei heruntergeladen.",0x34e0c0);
   }catch(e){ toast("Speichern fehlgeschlagen.",0xff5d6c); }
 }
 function clearFactory(){
@@ -996,9 +1028,7 @@ function clearFactory(){
   for(const it of items) scene.remove(it.mesh); items.length=0;
   for(const p of patches) scene.remove(p); patches.length=0;
 }
-function loadGame(){
-  const raw=localStorage.getItem(SAVE_KEY); if(!raw) return false;
-  let d; try{ d=JSON.parse(raw); }catch(e){ return false; }
+function loadGame(d){
   if(!d||!Array.isArray(d.buildings)) return false;
   clearFactory();
   for(const sb of d.buildings){ placeDir=sb.dir||1;
@@ -1034,12 +1064,15 @@ updateMusicBtn();
 
 document.getElementById('back').onclick=()=>{ musicEl.pause(); location.href='index.html'; };
 document.getElementById('save-btn').onclick=()=>saveGame();
+document.getElementById('load-btn').onclick=()=>document.getElementById('load-file').click();
+document.getElementById('load-file').onchange=e=>{ const f=e.target.files[0]; e.target.value=""; if(!f) return;
+  const r=new FileReader(); r.onload=()=>{ try{ if(!loadGame(JSON.parse(r.result))) toast("Ungültige Spielstand-Datei.",0xff5d6c); }catch(err){ toast("Ungültige Spielstand-Datei.",0xff5d6c); } }; r.readAsText(f); };
 document.getElementById('startbtn').onclick=()=>{ document.getElementById('intro').classList.add('hide'); started=true; if(musicOn) playTrack(); toast("Sand, Kohle & Wasser liegen schon auf der Karte ✦ baue ☀️ Solar, verlege 🔌 Kabel & ➤ Bänder. Taste T = Tipp.",0x34e0c0); };
 
 /* Laden (aus dem Hauptmenü) oder frische Karte erzeugen */
-if(sessionStorage.getItem('chiptorio-load')==='1' && localStorage.getItem(SAVE_KEY)){
-  sessionStorage.removeItem('chiptorio-load'); if(!loadGame()) scatterResources();
-} else { sessionStorage.removeItem('chiptorio-load'); scatterResources(); }
+const _loadData=sessionStorage.getItem('chiptorio-loaddata');
+if(_loadData){ sessionStorage.removeItem('chiptorio-loaddata'); let ok=false; try{ ok=loadGame(JSON.parse(_loadData)); }catch(e){} if(!ok){ scatterResources(); toast("Spielstand-Datei ungültig.",0xff5d6c); } }
+else scatterResources();
 </script>
 </body>
 </html>
