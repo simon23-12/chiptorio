@@ -182,7 +182,7 @@
     <button class="big" id="start-easy">🟢 Einfach</button>
     <button class="big" id="start-hard">🔴 Schwer</button>
   </div>
-  <p style="font-size:12px;color:var(--dim);max-width:560px;margin-top:8px"><b>Einfach:</b> entspannter Aufbau. &nbsp;<b>Schwer:</b> 4× größeres Feld &amp; mehr Startkapital; nur HCl &amp; Argon sind kaufbar — die übrigen 8 Chemikalien (N₂ … Epoxidharz) liegen als Vorkommen auf der Karte und müssen per 🧪 <b>Chemiefabrik</b> in die Vorräte umgewandelt werden.</p>
+  <p style="font-size:12px;color:var(--dim);max-width:560px;margin-top:8px"><b>Einfach:</b> entspannter Aufbau. &nbsp;<b>Schwer:</b> 4× größeres Feld &amp; mehr Startkapital; nur HCl ist kaufbar — alle übrigen Chemikalien (N₂ … Epoxidharz &amp; Argon) liegen als Vorkommen auf der Karte und müssen per 🧪 <b>Chemiefabrik</b> in die Vorräte umgewandelt werden.</p>
 </div>
 
 <script type="importmap">
@@ -262,13 +262,14 @@ const SOURCES = {
 };
 
 // ---- Modus „schwer": chemische Rohstoff-Vorkommen + Chemiefabrik ----
-// Nur HCl & Argon bleiben kaufbar; diese 8 Stoffe liegen als Vorkommen auf der Karte (Start-Vorrat 0)
+// Nur HCl bleibt kaufbar; diese Stoffe (inkl. Argon) liegen als Vorkommen auf der Karte (Start-Vorrat 0)
 // und werden über die Chemiefabrik wieder in die Vorräte umgefüllt (Fab/Packaging ziehen daraus).
-const CHEM_KEYS=['n2','f2','resist','boron','phos','arsenic','copper','epoxy'];
+const CHEM_KEYS=['n2','f2','resist','boron','phos','arsenic','copper','epoxy','ar'];
 const isChem = t => CHEM_KEYS.includes(t);
 const CHEM_META={
   n2:{ic:'🟦',col:0x9fb8e0}, f2:{ic:'🟩',col:0xc9e26a}, resist:{ic:'🟧',col:0xe07a4a}, boron:{ic:'🟫',col:0x8a6a4a},
-  phos:{ic:'🟢',col:0x8fe06a}, arsenic:{ic:'🟣',col:0x9a8fb0}, copper:{ic:'🟠',col:0xc77b4a}, epoxy:{ic:'🟡',col:0xd9b34a}
+  phos:{ic:'🟢',col:0x8fe06a}, arsenic:{ic:'🟣',col:0x9a8fb0}, copper:{ic:'🟠',col:0xc77b4a}, epoxy:{ic:'🟡',col:0xd9b34a},
+  ar:{ic:'⬜',col:0xcdbce6}
 };
 for(const kk of CHEM_KEYS){ const m=CHEM_META[kk];
   ITEMS[kk]={name:SUP[kk].name, col:m.col};                                              // Rohstoff als Förderband-Item
@@ -301,27 +302,30 @@ function toolList(){ // Chemiefabrik + Upgrade-Werkzeug nur im Modus „schwer"
 const GAS_CAP = 2000; // Gastank-Kapazität je Gas im Modus „einfach" (sehr groß = "Abfluss")
 
 // ---- Upgrades / Tech-Tree (nur Modus „schwer"; in „einfach" bleiben alle Stufen 1 = neutral) ----
-const SOLAR_MULT=[1,1.10,1.25], CARRIER_MULT=[1,1.5,2.0], MACHINE_MULT=[1,1.4,1.8], CAP_MULT=[1,1.5,2.0], GAS_CAP_HARD=[300,800,2000];
-const TECH_KEYS=['solar','battery','gastank','belt','pipe'];
+const SOLAR_MULT=[1,1.10,1.25], CARRIER_MULT=[1,1.5,2.0], MACHINE_MULT=[1,1.4,1.8], CAP_MULT=[1,1.5,2.0], CHIP_MULT=[1,1.6,2.4], GAS_CAP_HARD=[300,800,2000];
+const TECH_KEYS=['solar','battery','gastank','belt','pipe','chip'];
 const solarMult =()=>SOLAR_MULT[(game.tech.solar||1)-1];
 const beltMult  =()=>CARRIER_MULT[(game.tech.belt||1)-1];
 const pipeMult  =()=>CARRIER_MULT[(game.tech.pipe||1)-1];
 const batMult   =()=>CAP_MULT[(game.tech.battery||1)-1];
+const chipMult  =()=>CHIP_MULT[(game.tech.chip||1)-1];
+const chipPrice =()=>Math.round(CHIP_PRICE*chipMult());        // Verkaufswert pro Chip (inkl. End-Chip-Upgrade)
 const machineMult=lvl=>MACHINE_MULT[(lvl||1)-1];
 const capOf     =b=> (DEF[b.kind].powerCap||0)*batMult();      // effektive Akku-Kapazität (inkl. Upgrade)
 const gasCap    =()=> game.difficulty==='hard' ? GAS_CAP_HARD[(game.tech.gastank||1)-1] : GAS_CAP;
-const TECH_COST={ solar:[800,2000], battery:[700,1800], gastank:[600,1500], belt:[1200,3000], pipe:[1000,2500] }; // Kosten Stufe1→2, Stufe2→3
+const TECH_COST={ solar:[800,2000], battery:[700,1800], gastank:[600,1500], belt:[1200,3000], pipe:[1000,2500], chip:[3000,8000] }; // Kosten Stufe1→2, Stufe2→3
 const TECH_INFO={
   solar:  {name:'Solarzellen',        ic:'☀️', eff:l=>['Basis-Ertrag','+10 % Ertrag','+25 % Ertrag'][l-1]},
   battery:{name:'Energiespeicher',    ic:'🔋', eff:l=>'Kapazität ×'+CAP_MULT[l-1].toFixed(2)+' ('+(DEF.battery.powerCap*CAP_MULT[l-1])+' ⚡)'},
   gastank:{name:'Gastank-Kapazität',  ic:'🛢️', eff:l=>GAS_CAP_HARD[l-1]+' Gas / Tank'},
   belt:   {name:'Förderbänder',       ic:'➤', eff:l=>'Transport ×'+CARRIER_MULT[l-1].toFixed(2)},
   pipe:   {name:'Rohre',              ic:'🚰', eff:l=>'Transport ×'+CARRIER_MULT[l-1].toFixed(2)},
+  chip:   {name:'End-Chip-Veredelung',ic:'🔲', eff:l=>['Standard-Chip','Premium-Chip','High-End-Chip'][l-1]+' · '+Math.round(CHIP_PRICE*CHIP_MULT[l-1])+' 💵/Chip'},
 };
 const KEYMAP = {}; // Bauteile werden per Mausklick in der Leiste gewählt — keine Hotkeys (Tasten gehören der Navigation)
 
 const DAYLEN = 100; // Sekunden pro Tag/Nacht-Zyklus
-const game = { money:5500, chips:0, made:{}, goalsDone:{}, tech:{solar:1,battery:1,gastank:1,belt:1,pipe:1},
+const game = { money:5500, chips:0, made:{}, goalsDone:{}, tech:{solar:1,battery:1,gastank:1,belt:1,pipe:1,chip:1},
   powerGen:0, powerDemand:0, powerOK:true, rate:0, soldWindow:[],
   storedPower:0, powerCap:0, timeOfDay:0.33, sun:1, speed:1, difficulty:'easy' };
 
@@ -431,10 +435,10 @@ function makeMesh(kind,dir){
     const W=8*S, H=3*S;
     add(B(W-.2,.5,H-.2,0x3a4a5a,{roughness:.6}),0,.25,0);
     add(B(W-.7,.16,H-.7,0x4a5a6a),0,.55,0);
-    const cols=[0x9fb8e0,0xc9e26a,0xe07a4a,0x8a6a4a,0x8fe06a,0x9a8fb0,0xc77b4a,0xd9b34a];
-    for(let i=0;i<8;i++){ const px=-W/2+0.9+i*(W-1.8)/7;
-      add(C(.2,.22,.7,cols[i],{metalness:.4,roughness:.45,emissive:cols[i],emissiveIntensity:.18}),px,.95,-.55);
-      add(C(.22,.22,.05,0x223040),px,1.32,-.55); }
+    const nT=CHEM_KEYS.length; // ein Tank je Roh-Chemikalie
+    for(let i=0;i<nT;i++){ const c=CHEM_META[CHEM_KEYS[i]].col; const px=-W/2+0.7+i*(W-1.4)/(nT-1);
+      add(C(.17,.19,.7,c,{metalness:.4,roughness:.45,emissive:c,emissiveIntensity:.2}),px,.95,-.55);
+      add(C(.19,.19,.05,0x223040),px,1.32,-.55); }
     for(let i=0;i<4;i++){ const px=-W/2+1.2+i*2; add(C(.17,.17,1.1,0x6a7a8a,{metalness:.5}),px,1.05,.7); add(C(.19,.19,.08,0x90a0b0),px,1.62,.7); }
     add(makeTextSprite("CHEMIE",0xbfe0ff),0,1.75,0);
     const ind=SP(.12,0x44ff88,{emissive:0x115522,emissiveIntensity:1}); add(ind,0,1.95,0); g.userData.ind=ind;
@@ -547,7 +551,7 @@ function pipeInflow(b){
   const opp=(b.dir+2)%4;
   const feeds=s=>{ const nx=b.x+DIRS[s][0], nz=b.z+DIRS[s][1]; const nb=grid_.get(k(nx,nz)); if(!nb) return false;
     if(nb.kind==="pipe") return nb.x+DIRS[nb.dir][0]===b.x && nb.z+DIRS[nb.dir][1]===b.z; // Nachbar-Rohr zeigt herein
-    return nb.kind==="pump"||nb.kind==="electrolyseur"; // Fluid-Quellen geben rundum ab
+    return nb.kind==="pump"||nb.kind==="electrolyseur"||nb.kind==="gastank"; // Fluid-Quellen (inkl. Gastank-Abfluss) geben rundum ab
   };
   if(feeds(opp)) return opp;                       // gerade bevorzugt
   for(const s of [(b.dir+1)%4,(b.dir+3)%4]) if(feeds(s)) return s; // sonst Bogen
@@ -617,7 +621,7 @@ function machineAccepts(b,type){
   if(b.kind==="chemfab") return isChem(type) && (b.buf[type]||0) < CHEM_BUF_CAP; // Chemiefabrik nimmt die 8 Rohstoffe
   const r=RECIPES[b.kind]; return r && r.in[type]!=null && (b.buf[type]||0) < r.in[type]*4; }
 
-function sellChip(){ game.money += CHIP_PRICE; game.chips++; game.soldWindow.push(performance.now()); }
+function sellChip(){ game.money += chipPrice(); game.chips++; game.soldWindow.push(performance.now()); }
 // Versuch, ein Item an Nachbarfeld (nx,nz) auszugeben — von der Quell-Zelle (fx,fz) kommend.
 function tryDeposit(type,nx,nz,fx,fz){
   const nb=grid_.get(k(nx,nz)); if(!nb) return false;
@@ -769,7 +773,7 @@ function autoBuy(dt){
   if(!document.getElementById('autobuy').checked) return;
   autoTimer+=dt; if(autoTimer<0.5) return; autoTimer=0;
   for(const key in SUP){ const s=SUP[key];
-    if(game.difficulty==="hard" && key!=="hcl" && key!=="ar") continue; // im Modus „schwer" nur HCl & Ar kaufbar
+    if(game.difficulty==="hard" && key!=="hcl") continue; // im Modus „schwer" nur HCl kaufbar
     if(s.stock<25){ const batch=40, cost=batch*s.price; if(game.money>=cost){ s.stock+=batch; game.money-=cost; } }
   }
 }
@@ -779,7 +783,8 @@ function statusOf(b){
   const d=DEF[b.kind];
   if(d.powerUse && !b.powered) return b.wired?["kein Strom",0xff5d6c]:["nicht verbunden",0xff5d6c];
   if(b.kind==="electrolyseur"){ if((b.h2Buf||0)>0||(b.o2Buf||0)>0) return ["gibt H₂/O₂ ab",0x44ff88]; if((b.buf.water||0)>=2) return ["läuft",0x44ff88]; return ["wartet auf Wasser",0xff5d6c]; }
-  if(b.kind==="gastank"){ return ["🛢️ H₂ "+Math.round(b.buf.h2||0)+" · O₂ "+Math.round(b.buf.o2||0)+((b.buf.water|0)?(" · 💧"+Math.round(b.buf.water)):""),0x44ff88]; }
+  if(b.kind==="gastank"){ const c=gasCap(), h=Math.round(b.buf.h2||0), o=Math.round(b.buf.o2||0), w=Math.round(b.buf.water||0);
+    const full=Math.max(h,o,w)>=c*0.999; return ["🛢️ H₂ "+h+"/"+c+" · O₂ "+o+"/"+c+(w?(" · 💧"+w):"")+(full?" · VOLL":""), full?0xffd24a:0x44ff88]; }
   if(b.kind==="chemfab"){ const tot=CHEM_KEYS.reduce((s,kk)=>s+(b.buf[kk]||0),0); return tot>0?["wandelt um",0x44ff88]:["wartet auf Rohstoffe",0xffd24a]; }
   if(SOURCES[b.kind]){ if(b.outBuf>0) return ["Ausgang voll",0xffd24a]; return ["läuft",0x44ff88]; }
   if(RECIPES[b.kind]){
@@ -987,7 +992,7 @@ const WHY = {
   fab:"Belichtet, ätzt und dotiert die Wafer zu fertigen Schaltungen.",
   packaging:"Verpackt den Chip schützend in ein Gehäuse.",
   seller:"Verkauft fertige Chips und bringt dir Geld.",
-  chemfab:"Nur im schweren Modus: Verarbeitet die 8 chemischen Rohstoff-Vorkommen (per ➤ Förderband zugeführt) und füllt damit die Vorräte (N₂, Fluor, Photoresist, Bor, Phosphor, Arsen, Kupfer, Epoxidharz) wieder auf — diese sind im schweren Modus nicht kaufbar. Belegt 8×3 Felder, braucht 200 ⚡.",
+  chemfab:"Nur im schweren Modus: Verarbeitet die chemischen Rohstoff-Vorkommen (per ➤ Förderband zugeführt) und füllt damit die Vorräte (N₂, Fluor, Photoresist, Bor, Phosphor, Arsen, Kupfer, Epoxidharz, Argon) wieder auf — diese sind im schweren Modus nicht kaufbar. Belegt 8×3 Felder, braucht 200 ⚡.",
   delete:"Reißt Gebäude ab (50 % der Kosten zurück).",
   upgrade:"Nur im schweren Modus: Werkzeug wählen und eine Maschine anklicken, um sie einzeln auf mehr Geschwindigkeit zu upgraden (bis Stufe 3). Kosten richten sich nach der Maschine.",
 };
@@ -1002,8 +1007,8 @@ function infoHTML(kind){
   else if(SOURCES[kind]) prod.push(ITEMS[SOURCES[kind].out].name);
   if(d.powerGen) prod.push(d.powerGen+" ⚡"+(kind==="solar"?" (tagsüber)":kind==="nuclear"?" (24/7)":""));
   if(d.powerCap) prod.push("speichert "+d.powerCap+" ⚡");
-  if(kind==="seller") prod.push("+"+CHIP_PRICE+" 💵 pro Chip");
-  if(kind==="chemfab"){ cons.push("Roh-Chemikalien (8 Vorkommen)"); prod.push("füllt Vorräte auf (N₂ · Fluor · Photoresist · Bor · Phosphor · Arsen · Kupfer · Epoxidharz)"); }
+  if(kind==="seller") prod.push("+"+chipPrice()+" 💵 pro Chip");
+  if(kind==="chemfab"){ cons.push("Roh-Chemikalien (Vorkommen)"); prod.push("füllt Vorräte auf (N₂ · Fluor · Photoresist · Bor · Phosphor · Arsen · Kupfer · Epoxidharz · Argon)"); }
   const fp=d.size?` · belegt ${d.size[0]*d.size[1]} Felder (${d.size[0]}×${d.size[1]})`:(kind==="electrolyseur"?" · belegt 3 Felder (H₂- & O₂-Rohr fest verbaut)":"");
   return `<h3>${d.ic} ${d.name}</h3>`+
     `<div class="cost">${(kind==="delete"||kind==="upgrade")?"":d.cost+" 💵"}${fp}</div>`+
@@ -1034,7 +1039,7 @@ function buildSupplies(){
   const list=document.getElementById('sup-list'); list.innerHTML="";
   for(const key in SUP){ const s=SUP[key];
     const el=document.createElement('div'); el.className="sup"; el.id="sup-"+key;
-    const chem = game.difficulty==="hard" && key!=="hcl" && key!=="ar"; // nicht kaufbar → kommt aus der Chemiefabrik
+    const chem = game.difficulty==="hard" && key!=="hcl"; // nicht kaufbar → kommt aus der Chemiefabrik
     el.innerHTML=`<span class="nm">${chem?'🧪 ':''}${s.name}</span><span class="st">0</span>`; list.appendChild(el);
   }
 }
@@ -1058,7 +1063,7 @@ function updateHUD(){
   document.getElementById('s-chips').textContent=game.chips;
   // Verkaufsrate /min
   const now=performance.now(); game.soldWindow=game.soldWindow.filter(t=>now-t<60000);
-  document.getElementById('s-rate').textContent=(game.soldWindow.length*CHIP_PRICE);
+  document.getElementById('s-rate').textContent=(game.soldWindow.length*chipPrice());
   // Tageszeit
   const h=Math.floor(game.timeOfDay*24), m=Math.floor((game.timeOfDay*24%1)*60);
   const ts=document.getElementById('s-time'); ts.textContent=(game.sun>0.06?"☀️":"🌙")+" "+String(h).padStart(2,"0")+":"+String(m).padStart(2,"0"); ts.style.color=game.sun>0.06?"var(--warn)":"var(--acc2)";
@@ -1077,7 +1082,7 @@ function labelHTML(b){
     out+=`<br><span class="p">→ ${ITEMS[r.out].name}${r.outCount?(" ×"+r.outCount):""}</span>`;
     if(d.powerUse) out+=`<br><span class="u">-${d.powerUse} ⚡</span>`;
   }
-  else if(b.kind==="seller") out+=`<br><span class="p">Chip → +${CHIP_PRICE} 💵</span>`;
+  else if(b.kind==="seller") out+=`<br><span class="p">Chip → +${chipPrice()} 💵</span>`;
   else if(b.kind==="battery"){ const c=capOf(b), p=Math.round(b.stored/c*100); out+=`<br><span class="p">🔋 geladen ${p}%</span><br><span class="u">Kapazität ${Math.round(c)} ⚡${batMult()>1?" (Lv "+(game.tech.battery)+")":""}</span>`; }
   if(game.difficulty==='hard' && (RECIPES[b.kind]||b.kind==='electrolyseur'||b.kind==='chemfab') && (b.speedLvl||1)>1) out+=`<br><span class="p">⬆️ Speed Stufe ${b.speedLvl}/3</span>`;
   const st=statusOf(b)[0];
@@ -1132,7 +1137,7 @@ function showTip(){ const box=document.getElementById('tipbox'); box.innerHTML="
   box.classList.remove('hide'); clearTimeout(showTip._t); showTip._t=setTimeout(()=>box.classList.add('hide'),6500); }
 
 /* ===================== ZIELE ===================== */
-function currentRate(){ const now=performance.now(); return game.soldWindow.filter(t=>now-t<60000).length*CHIP_PRICE; }
+function currentRate(){ const now=performance.now(); return game.soldWindow.filter(t=>now-t<60000).length*chipPrice(); }
 const GOALS={
   easy:[
     {id:'build', label:'Baue dein erstes Gebäude',            done:()=>buildings.some(b=>!b.fixed)},
@@ -1140,9 +1145,9 @@ const GOALS={
     {id:'ship',  label:'Versende deinen ersten Chip',          done:()=>game.chips>=1},
   ],
   hard:[
-    {id:'sup',    label:'Fülle alle Vorräte in der Chemiefabrik auf', prog:()=>CHEM_KEYS.filter(kk=>SUP[kk].stock>0).length+'/8', done:()=>CHEM_KEYS.every(kk=>SUP[kk].stock>0)},
+    {id:'sup',    label:'Fülle alle Vorräte in der Chemiefabrik auf', prog:()=>CHEM_KEYS.filter(kk=>SUP[kk].stock>0).length+'/'+CHEM_KEYS.length, done:()=>CHEM_KEYS.every(kk=>SUP[kk].stock>0)},
     {id:'chip5',  label:'Stelle 5 Chips her',           prog:()=>Math.min(game.made.chip||0,5)+'/5',     done:()=>(game.made.chip||0)>=5},
-    {id:'rate',   label:'Erreiche 1000 $/min',          prog:()=>Math.round(currentRate())+'/1000',      done:()=>currentRate()>=1000},
+    {id:'rate',   label:'Erreiche 3000 $/min',          prog:()=>Math.round(currentRate())+'/3000',      done:()=>currentRate()>=3000},
     {id:'money',  label:'Erreiche 50.000 $ Kontostand', prog:()=>Math.floor(game.money)+'/50000',         done:()=>game.money>=50000},
     {id:'gen',    label:'Erreiche 2000 kWh Stromerzeugung', prog:()=>Math.round(game.powerGen)+'/2000',   done:()=>game.powerGen>=2000},
     {id:'cap',    label:'Erreiche 1000 kW Energiespeicher',  prog:()=>Math.round(game.powerCap)+'/1000',  done:()=>game.powerCap>=1000},
@@ -1231,7 +1236,7 @@ function addPatch(kind,x,z){ // Boden-Markierung für das Vorkommen
 }
 function scatterResources(){
   const hard = game.difficulty==='hard';
-  // „einfach" unverändert; „schwer": 4× Feld → mehr Basisquellen + die 8 Chemie-Vorkommen (je 3, gleichmäßig verteilt)
+  // „einfach" unverändert; „schwer": 4× Feld → mehr Basisquellen + die Chemie-Vorkommen (je 3, gleichmäßig verteilt)
   const want = hard
     ? [["sandmine",8],["coalmine",6],["pump",6], ...CHEM_KEYS.map(kk=>['dep_'+kk,3])]
     : [["sandmine",5],["coalmine",3],["pump",3]]; // 10% mehr Quellen (11 statt 10)
@@ -1293,7 +1298,7 @@ function loadGame(d){
   placeDir=1;
   for(const si of (d.items||[])){ const t=grid_.get(k(si.x,si.z)); if(t&&(t.kind==="belt"||t.kind==="pipe")) makeItem(si.type,si.x,si.z,si.prog); }
   game.money=(d.money!=null?d.money:game.money); game.chips=d.chips||0; game.timeOfDay=d.timeOfDay||0.33; game.speed=1; game.soldWindow=[]; game.difficulty=d.difficulty||'easy';
-  game.made=d.made||{}; game.goalsDone=d.goalsDone||{}; game.tech=Object.assign({solar:1,battery:1,gastank:1,belt:1,pipe:1}, d.tech||{}); buildGoals();
+  game.made=d.made||{}; game.goalsDone=d.goalsDone||{}; game.tech=Object.assign({solar:1,battery:1,gastank:1,belt:1,pipe:1,chip:1}, d.tech||{}); buildGoals();
   for(const kk in SUP){ if(d.sup && d.sup[kk]!=null) SUP[kk].stock=d.sup[kk]; }
   const ab=document.getElementById('autobuy'); if(ab && d.autobuy!=null) ab.checked=d.autobuy;
   document.querySelectorAll('#speedctl .spd').forEach(e=>e.classList.toggle('sel', e.dataset.s==='1'));
@@ -1332,15 +1337,15 @@ function applyDifficulty(diff){
   document.getElementById('tech-btn').classList.toggle('hide', diff!=='hard');
   document.getElementById('techtree').classList.add('hide');
 }
-function resetSupplies(diff){ for(const kk in SUP){ SUP[kk].stock = (diff==='hard' && kk!=='hcl' && kk!=='ar') ? 0 : 80; } }
+function resetSupplies(diff){ for(const kk in SUP){ SUP[kk].stock = (diff==='hard' && kk!=='hcl') ? 0 : 80; } }
 function startFactory(diff){
   applyDifficulty(diff);
   game.money = diff==='hard'?HARD_MONEY:5500; game.chips=0; game.soldWindow=[]; resetSupplies(diff);
-  game.made={}; game.goalsDone={}; game.tech={solar:1,battery:1,gastank:1,belt:1,pipe:1};
+  game.made={}; game.goalsDone={}; game.tech={solar:1,battery:1,gastank:1,belt:1,pipe:1,chip:1};
   if(diff==='hard'){ clearFactory(); scatterResources(); } // schweres Feld neu erzeugen; „einfach" nutzt die beim Laden erzeugte Karte
   document.getElementById('intro').classList.add('hide'); started=true; if(musicOn) playTrack();
   toast(diff==='hard'
-    ? "🔴 Schwer — nur HCl & Argon kaufbar. Leite die 8 Chemie-Vorkommen per ➤ Band in die 🧪 Chemiefabrik. Feld 4× so groß. Taste T = Tipp."
+    ? "🔴 Schwer — nur HCl kaufbar. Leite die Chemie-Vorkommen (inkl. Argon) per ➤ Band in die 🧪 Chemiefabrik. Feld 4× so groß. Taste T = Tipp."
     : "🟢 Einfach — Sand, Kohle & Wasser liegen auf der Karte. Baue ☀️ Solar, verlege 🔌 Kabel & ➤ Bänder. Taste T = Tipp.",0x34e0c0);
 }
 document.getElementById('start-easy').onclick=()=>startFactory('easy');
