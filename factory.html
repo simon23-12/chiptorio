@@ -203,7 +203,7 @@ const DEF = {
   siemens:   {name:"Siemens-Reaktor", ic:"⚗️", cost:260, col:0x4a7a55, powerUse:14, cat:"Maschine"},
   crystal:   {name:"Kristallzieher", ic:"💎", cost:320, col:0x7a5aa0, powerUse:18, cat:"Maschine"},
   waferplant:{name:"Wafer-Werk", ic:"🥞", cost:300, col:0x5a7fb0, powerUse:8, cat:"Maschine"},
-  fab:       {name:"Frontend-Fab", ic:"🔬", cost:460, col:0x8a4fa0, powerUse:22, cat:"Maschine"},
+  fab:       {name:"Frontend-Fab", ic:"🔬", cost:460, col:0x8a4fa0, powerUse:22, size:[2,2], cat:"Maschine"},
   packaging: {name:"Packaging", ic:"📦", cost:280, col:0xb08030, powerUse:8, cat:"Maschine"},
   seller:    {name:"Versand", ic:"🚚", cost:100, col:0x3a9a5a, cat:"Logistik"},
 };
@@ -375,10 +375,12 @@ function makeMesh(kind,dir){
     case "waferplant": // gestapelte Wafer-Scheiben
       add(B(.7,.1,.7,0x2c3e58),0,.05,0);
       [.18,.3,.42,.54].forEach(y=>add(C(.3,.3,.05,0x9fb3c9,{metalness:.6,roughness:.25}),0,y,0)); indY=.84; break;
-    case "fab": // Reinraum-Box mit Kuppel/Lithografie
-      add(B(.82,.46,.82,0x8a4fa0,{roughness:.5}),0,.25,0);
-      add(SP(.2,0x9fb3ff,{transparent:true,opacity:.5,emissive:0x335588,emissiveIntensity:.5}),0,.5,0);
-      add(B(.1,.12,.1,0x5fd0ff,{emissive:0x2277cc,emissiveIntensity:.7}),.28,.55,.28); indY=.9; break;
+    case "fab": // Reinraum-Komplex 2×2 mit Kuppel/Lithografie
+      add(B(1.74,.5,1.74,0x8a4fa0,{roughness:.5}),0,.27,0);
+      add(B(1.4,.1,1.4,0x9a5fb0),0,.55,0);
+      add(SP(.36,0x9fb3ff,{transparent:true,opacity:.5,emissive:0x335588,emissiveIntensity:.5}),0,.64,0);
+      add(B(.16,.16,.16,0x5fd0ff,{emissive:0x2277cc,emissiveIntensity:.7}),.6,.66,.6);
+      add(B(.16,.16,.16,0x5fd0ff,{emissive:0x2277cc,emissiveIntensity:.7}),-.6,.66,-.6); indY=1.05; break;
     case "packaging": // Chip-Gehäuse mit goldenem Die + Beinchen
       add(B(.62,.18,.62,0x141414),0,.18,0);
       add(B(.32,.07,.32,0xffd24a,{emissive:0x4a3a00,emissiveIntensity:.4,metalness:.6}),0,.3,0);
