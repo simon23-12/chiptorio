@@ -151,7 +151,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 /* ===================== GRUND-DATEN ===================== */
-const N = 18, S = 1, HALF = (N-1)/2;
+const N = 23, S = 1, HALF = (N-1)/2; // Spielfeld ~30% größer
 const DIRS = [[0,-1],[1,0],[0,1],[-1,0]]; // N,E,S,W
 const ROT  = [Math.PI, Math.PI/2, 0, -Math.PI/2]; // Pfeil zeigt +z (Standard)
 
@@ -233,7 +233,7 @@ const GAS_CAP = 2000; // Gastank-Kapazität je Gas (sehr groß = "Abfluss")
 const KEYMAP = {}; // Bauteile werden per Mausklick in der Leiste gewählt — keine Hotkeys (Tasten gehören der Navigation)
 
 const DAYLEN = 100; // Sekunden pro Tag/Nacht-Zyklus
-const game = { money:4500, chips:0, powerGen:0, powerDemand:0, powerOK:true, rate:0, soldWindow:[],
+const game = { money:5500, chips:0, powerGen:0, powerDemand:0, powerOK:true, rate:0, soldWindow:[],
   storedPower:0, powerCap:0, timeOfDay:0.33, sun:1, speed:1 };
 
 /* ===================== THREE SETUP ===================== */
@@ -243,12 +243,12 @@ renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0e1626);
-scene.fog = new THREE.Fog(0x0e1626, 22, 48);
+scene.fog = new THREE.Fog(0x0e1626, 30, 64);
 const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.1, 200);
-camera.position.set(0, 16, 15);
+camera.position.set(0, 20, 19);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true; controls.dampingFactor = .09;
-controls.minDistance = 6; controls.maxDistance = 38; controls.maxPolarAngle = Math.PI*0.46;
+controls.minDistance = 6; controls.maxDistance = 52; controls.maxPolarAngle = Math.PI*0.46;
 controls.target.set(0,0,0);
 
 const ambient = new THREE.AmbientLight(0xb4c6e4, .7); scene.add(ambient);
@@ -284,6 +284,15 @@ let items = [];
 const patches = []; // Boden-Markierungen der Rohstoffquellen (für Speichern/Laden)
 
 /* ===================== GEBÄUDE-MESH ===================== */
+function makeTextSprite(txt, hex){
+  const c=document.createElement('canvas'); c.width=128; c.height=72; const x=c.getContext('2d');
+  x.font='bold 50px sans-serif'; x.textAlign='center'; x.textBaseline='middle';
+  x.lineWidth=7; x.strokeStyle='rgba(4,10,20,.9)'; x.strokeText(txt,64,38);
+  x.fillStyle='#'+hex.toString(16).padStart(6,'0'); x.fillText(txt,64,38);
+  const tex=new THREE.CanvasTexture(c); tex.minFilter=THREE.LinearFilter;
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthTest:false}));
+  sp.scale.set(.52,.29,1); return sp;
+}
 function makeMesh(kind,dir){
   const g = new THREE.Group(); const d = DEF[kind]; let indY=0.82;
   const add=(m,x,y,z,rx,ry,rz)=>{ m.position.set(x||0,y||0,z||0); if(rx)m.rotation.x=rx; if(ry)m.rotation.y=ry; if(rz)m.rotation.z=rz; g.add(m); return m; };
@@ -342,7 +351,9 @@ function makeMesh(kind,dir){
       add(CO(.12,.24,0x9fe8ff,{emissive:0x2c7a90,emissiveIntensity:1},4),0,.38,1.4,Math.PI/2);
       // O₂-Rohr (−z, blassweiß)
       add(C(.16,.16,1.0,0xe6f0ff,{metalness:.5,roughness:.3,emissive:0x6a8aa0,emissiveIntensity:.45}),0,.2,-1.0,Math.PI/2);
-      add(CO(.12,.24,0xe6f0ff,{emissive:0x6a8aa0,emissiveIntensity:1},4),0,.38,-1.4,-Math.PI/2); indY=.9; break;
+      add(CO(.12,.24,0xe6f0ff,{emissive:0x6a8aa0,emissiveIntensity:1},4),0,.38,-1.4,-Math.PI/2);
+      add(makeTextSprite("H₂",0xbfeeff),0,.62,1.0); add(makeTextSprite("O₂",0xeef4ff),0,.62,-1.0); // Beschriftung der Rohre
+      indY=.9; break;
     case "gastank": // Gas-Puffer: großer Drucktank mit Glaskuppel
       add(C(.34,.36,.72,0x6f6636,{metalness:.5,roughness:.4}),0,.38,0);
       add(C(.36,.36,.08,0x8a7d3a),0,.74,0);
@@ -989,8 +1000,8 @@ function addPatch(kind,x,z){ // Boden-Markierung für das Vorkommen
   m.rotation.x=-Math.PI/2; const [wx,wz]=tileToWorld(x,z); m.position.set(wx,.02,wz); scene.add(m); patches.push(m);
 }
 function scatterResources(){
-  const want=[["sandmine",4],["coalmine",3],["pump",3]];
-  const placed=[]; const minDist=3;
+  const want=[["sandmine",5],["coalmine",3],["pump",3]]; // 10% mehr Quellen (11 statt 10)
+  const placed=[]; const minDist=5;                       // größere Abstände
   for(const [kind,num] of want){
     let made=0, tries=0;
     while(made<num && tries<500){ tries++;
