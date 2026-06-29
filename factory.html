@@ -143,7 +143,7 @@
     <button class="big" id="start-easy">🟢 Einfach</button>
     <button class="big" id="start-hard">🔴 Schwer</button>
   </div>
-  <p style="font-size:12px;color:var(--dim);max-width:540px;margin-top:8px"><b>Einfach:</b> entspannter Aufbau (der aktuelle Modus). &nbsp;<b>Schwer:</b> anspruchsvoller — wird gerade gebaut, startet vorerst wie „Einfach".</p>
+  <p style="font-size:12px;color:var(--dim);max-width:560px;margin-top:8px"><b>Einfach:</b> entspannter Aufbau. &nbsp;<b>Schwer:</b> 4× größeres Feld &amp; mehr Startkapital; nur HCl &amp; Argon sind kaufbar — die übrigen 8 Chemikalien (N₂ … Epoxidharz) liegen als Vorkommen auf der Karte und müssen per 🧪 <b>Chemiefabrik</b> in die Vorräte umgewandelt werden.</p>
 </div>
 
 <script type="importmap">
@@ -158,7 +158,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 /* ===================== GRUND-DATEN ===================== */
-const N = 23, S = 1, HALF = (N-1)/2; // Spielfeld ~30% größer
+let N = 23; const S = 1; let HALF = (N-1)/2; // Spielfeld ~30% größer · Modus „schwer": 4× Fläche (N=46)
 const DIRS = [[0,-1],[1,0],[0,1],[-1,0]]; // N,E,S,W
 const ROT  = [Math.PI, Math.PI/2, 0, -Math.PI/2]; // Pfeil zeigt +z (Standard)
 
@@ -222,6 +222,24 @@ const SOURCES = {
   pump:     {out:"water", time:1.1},
 };
 
+// ---- Modus „schwer": chemische Rohstoff-Vorkommen + Chemiefabrik ----
+// Nur HCl & Argon bleiben kaufbar; diese 8 Stoffe liegen als Vorkommen auf der Karte (Start-Vorrat 0)
+// und werden über die Chemiefabrik wieder in die Vorräte umgefüllt (Fab/Packaging ziehen daraus).
+const CHEM_KEYS=['n2','f2','resist','boron','phos','arsenic','copper','epoxy'];
+const isChem = t => CHEM_KEYS.includes(t);
+const CHEM_META={
+  n2:{ic:'🟦',col:0x9fb8e0}, f2:{ic:'🟩',col:0xc9e26a}, resist:{ic:'🟧',col:0xe07a4a}, boron:{ic:'🟫',col:0x8a6a4a},
+  phos:{ic:'🟢',col:0x8fe06a}, arsenic:{ic:'🟣',col:0x9a8fb0}, copper:{ic:'🟠',col:0xc77b4a}, epoxy:{ic:'🟡',col:0xd9b34a}
+};
+for(const kk of CHEM_KEYS){ const m=CHEM_META[kk];
+  ITEMS[kk]={name:SUP[kk].name, col:m.col};                                              // Rohstoff als Förderband-Item
+  DEF['dep_'+kk]={name:SUP[kk].name+"-Vorkommen", ic:m.ic, col:m.col, powerUse:2, cat:"Rohstoff"}; // festes Vorkommen
+  SOURCES['dep_'+kk]={out:kk, time:1.8};
+}
+DEF.chemfab={name:"Chemiefabrik", ic:"🧪", cost:1800, col:0x4a5a6a, powerUse:200, size:[8,3], cat:"Maschine"};
+const CHEM_TIME=1.0, CHEM_YIELD=3, CHEM_BUF_CAP=8; // Chemiefabrik: 1 Rohstoff → +CHEM_YIELD Vorrat alle CHEM_TIME s
+const HARD_MONEY=20000;                            // Startkapital im Modus „schwer"
+
 // Rezepte: in = Items (Belt-Feststoffe + Rohr-Flüssigkeiten/Gase), sup = gekaufte Vorräte, out = Belt-Item.
 // Elektrolyseur ist Spezialfall: water → 2× H₂ + 1× O₂ (siehe tickWork).
 const RECIPES = {
@@ -236,6 +254,10 @@ const RECIPES = {
 const CHIP_PRICE = 155;
 // Sandgrube/Kohlemine/Wasserpumpe sind NICHT baubar — sie werden beim Start zufällig auf der Karte verteilt.
 const TOOLS = ["belt","pipe","cable","solar","battery","nuclear","electrolyseur","gastank","furnace","siemens","crystal","waferplant","fab","packaging","seller","delete"];
+function toolList(){ // Chemiefabrik nur im Modus „schwer"
+  if(game.difficulty!=='hard') return TOOLS;
+  const t=TOOLS.slice(); t.splice(t.indexOf('seller'),0,'chemfab'); return t;
+}
 const GAS_CAP = 2000; // Gastank-Kapazität je Gas (sehr groß = "Abfluss")
 const KEYMAP = {}; // Bauteile werden per Mausklick in der Leiste gewählt — keine Hotkeys (Tasten gehören der Navigation)
 
@@ -269,12 +291,22 @@ function applyDayNight(){ const s=game.sun;
   scene.background.copy(_nightBg).lerp(_dayBg, s); scene.fog.color.copy(scene.background);
 }
 
-// Boden + Gitter
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(N*S, N*S),
-  new THREE.MeshStandardMaterial({color:0x12203a, roughness:.95}));
-ground.rotation.x = -Math.PI/2; ground.position.y = 0; scene.add(ground);
-const grid = new THREE.GridHelper(N*S, N, 0x33507e, 0x1d3052);
-grid.position.y = 0.01; grid.material.transparent=true; grid.material.opacity=.5; scene.add(grid);
+// Boden + Gitter — in setFieldSize() aufgebaut, da der Modus „schwer" ein 4× größeres Feld nutzt.
+let ground=null, grid=null;
+function setFieldSize(n){
+  N=n; HALF=(N-1)/2;
+  if(ground){ scene.remove(ground); ground.geometry.dispose(); }
+  if(grid){ scene.remove(grid); grid.geometry.dispose(); }
+  ground = new THREE.Mesh(new THREE.PlaneGeometry(N*S, N*S),
+    new THREE.MeshStandardMaterial({color:0x12203a, roughness:.95}));
+  ground.rotation.x = -Math.PI/2; ground.position.y = 0; scene.add(ground);
+  grid = new THREE.GridHelper(N*S, N, 0x33507e, 0x1d3052);
+  grid.position.y = 0.01; grid.material.transparent=true; grid.material.opacity=.5; scene.add(grid);
+  const big = n>30;
+  scene.fog.near = big?55:30; scene.fog.far = big?150:64;
+  controls.maxDistance = big?130:52;
+}
+setFieldSize(23);
 
 addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
 
@@ -323,6 +355,28 @@ function makeMesh(kind,dir){
   if(kind==="pipe"){ // Rohr: Form (gerade/Bogen) wird in buildPipeVisual berechnet
     add(B(.92,.05,.92,0x16323e),0,.025,0); // Basisplatte
     buildPipeVisual(g, dir, null);         // Standard gerade; Ecken nach dem Platzieren via refreshPipe
+    return g;
+  }
+  if(kind.startsWith("dep_")){ // chemisches Rohstoff-Vorkommen (Modus „schwer")
+    const c=DEF[kind].col;
+    add(B(.8,.26,.8,0x3a3320),0,.13,0);
+    add(C(.26,.3,.5,c,{metalness:.4,roughness:.5}),0,.34,0);
+    add(C(.28,.28,.06,0x222222),0,.6,0);
+    add(SP(.16,c,{emissive:c,emissiveIntensity:.5,transparent:true,opacity:.85}),0,.62,0);
+    const ind=SP(.1,0x44ff88,{emissive:0x115522,emissiveIntensity:1}); add(ind,0,.92,0); g.userData.ind=ind;
+    g.rotation.y=ROT[dir]; return g;
+  }
+  if(kind==="chemfab"){ // Chemiefabrik 8×3 — achsenparallel (Footprint fix 8×3, daher keine Rotation)
+    const W=8*S, H=3*S;
+    add(B(W-.2,.5,H-.2,0x3a4a5a,{roughness:.6}),0,.25,0);
+    add(B(W-.7,.16,H-.7,0x4a5a6a),0,.55,0);
+    const cols=[0x9fb8e0,0xc9e26a,0xe07a4a,0x8a6a4a,0x8fe06a,0x9a8fb0,0xc77b4a,0xd9b34a];
+    for(let i=0;i<8;i++){ const px=-W/2+0.9+i*(W-1.8)/7;
+      add(C(.2,.22,.7,cols[i],{metalness:.4,roughness:.45,emissive:cols[i],emissiveIntensity:.18}),px,.95,-.55);
+      add(C(.22,.22,.05,0x223040),px,1.32,-.55); }
+    for(let i=0;i<4;i++){ const px=-W/2+1.2+i*2; add(C(.17,.17,1.1,0x6a7a8a,{metalness:.5}),px,1.05,.7); add(C(.19,.19,.08,0x90a0b0),px,1.62,.7); }
+    add(makeTextSprite("CHEMIE",0xbfe0ff),0,1.75,0);
+    const ind=SP(.12,0x44ff88,{emissive:0x115522,emissiveIntensity:1}); add(ind,0,1.95,0); g.userData.ind=ind;
     return g;
   }
   switch(kind){
@@ -498,7 +552,9 @@ function placeItemMesh(it){
 }
 const carrierOk = (b,type)=> (b.kind==="belt"&&!isFluid(type)) || (b.kind==="pipe"&&isFluid(type));
 function occupiedStart(x,z){ for(const it of items){ if(!it._dead&&it.x===x&&it.z===z&&it.prog<SPACING) return true; } return false; }
-function machineAccepts(b,type){ const r=RECIPES[b.kind]; return r && r.in[type]!=null && (b.buf[type]||0) < r.in[type]*4; }
+function machineAccepts(b,type){
+  if(b.kind==="chemfab") return isChem(type) && (b.buf[type]||0) < CHEM_BUF_CAP; // Chemiefabrik nimmt die 8 Rohstoffe
+  const r=RECIPES[b.kind]; return r && r.in[type]!=null && (b.buf[type]||0) < r.in[type]*4; }
 
 function sellChip(){ game.money += CHIP_PRICE; game.chips++; game.soldWindow.push(performance.now()); }
 // Versuch, ein Item an Nachbarfeld (nx,nz) auszugeben — von der Quell-Zelle (fx,fz) kommend.
@@ -512,6 +568,7 @@ function tryDeposit(type,nx,nz,fx,fz){
     makeItem(type,nx,nz,0.05); return true;
   }
   if(RECIPES[nb.kind] && machineAccepts(nb,type)){ nb.buf[type]=(nb.buf[type]||0)+1; return true; }
+  if(nb.kind==="chemfab" && machineAccepts(nb,type)){ nb.buf[type]=(nb.buf[type]||0)+1; return true; }
   if(nb.kind==="gastank" && isFluid(type) && (nb.buf[type]||0)<GAS_CAP){ nb.buf[type]=(nb.buf[type]||0)+1; return true; }
   if(nb.kind==="seller" && type==="chip"){ sellChip(); return true; }
   return false;
@@ -558,6 +615,7 @@ function moveItems(dt){
       const nx=it.x+d[0], nz=it.z+d[1]; const nb=grid_.get(k(nx,nz));
       if(nb && (nb.kind==="belt"||nb.kind==="pipe") && carrierOk(nb,it.type) && !occupiedStart(nx,nz)){ it.x=nx; it.z=nz; it.prog=0.0; }
       else if(nb && RECIPES[nb.kind] && machineAccepts(nb,it.type)){ nb.buf[it.type]=(nb.buf[it.type]||0)+1; it._dead=true; scene.remove(it.mesh); continue; }
+      else if(nb && nb.kind==="chemfab" && machineAccepts(nb,it.type)){ nb.buf[it.type]=(nb.buf[it.type]||0)+1; it._dead=true; scene.remove(it.mesh); continue; }
       else if(nb && nb.kind==="gastank" && isFluid(it.type) && (nb.buf[it.type]||0)<GAS_CAP){ nb.buf[it.type]=(nb.buf[it.type]||0)+1; it._dead=true; scene.remove(it.mesh); continue; }
       else if(nb && nb.kind==="seller" && it.type==="chip"){ sellChip(); it._dead=true; scene.remove(it.mesh); continue; }
       else it.prog=1.0;
@@ -576,7 +634,7 @@ function computeUtilities(dt){
   for(const b of buildings){ if(RECIPES[b.kind]){
     if(b.kind==="electrolyseur") b.want = (b.h2Buf||0)<=0 && (b.o2Buf||0)<=0 && hasInputs(b);
     else b.want = b.outBuf===0 && hasInputs(b) && hasSupplies(b);
-  } }
+  } else if(b.kind==="chemfab"){ b.want = CHEM_KEYS.some(kk=>(b.buf[kk]||0)>0); } }
 
   // ---- STROMNETZE (per Kabel verbunden) ----
   const parent={};
@@ -595,7 +653,7 @@ function computeUtilities(dt){
   for(const b of pbuild){ const r=find(b._pid); const net=nets[r]||(nets[r]={gen:0,dem:0,bats:[],cons:[]}); const d=DEF[b.kind];
     if(d.powerGen) net.gen += d.powerGen*(b.kind==="solar"?game.sun:1); // Solar: nachts 0, AKW: konstant
     if(d.powerCap) net.bats.push(b);
-    if(d.powerUse){ const wants = RECIPES[b.kind]? b.want : true; if(wants) net.dem+=d.powerUse; net.cons.push(b); }
+    if(d.powerUse){ const wants = (RECIPES[b.kind]||b.kind==="chemfab")? b.want : true; if(wants) net.dem+=d.powerUse; net.cons.push(b); }
   }
   let gGen=0,gDem=0,anyUnpowered=false;
   for(const r in nets){ const net=nets[r];
@@ -606,7 +664,7 @@ function computeUtilities(dt){
         for(const b of net.bats){ const c=DEF[b.kind].powerCap, free=c-b.stored; b.stored=Math.min(c, b.stored+give*(free/room)); } } }
     else { const deficit=-surplus; if(stored>0){ ok=true; const take=Math.min(deficit*dt,stored);
         for(const b of net.bats){ b.stored=Math.max(0, b.stored - take*(b.stored/stored)); } } else ok=false; }
-    for(const b of net.cons){ b.powered=ok; const w = RECIPES[b.kind]?b.want:true; if(!ok && w) anyUnpowered=true; }
+    for(const b of net.cons){ b.powered=ok; const w = (RECIPES[b.kind]||b.kind==="chemfab")?b.want:true; if(!ok && w) anyUnpowered=true; }
     gGen+=net.gen; gDem+=net.dem;
   }
   let gCap=0,gStored=0; for(const b of buildings){ const d=DEF[b.kind]; if(d.powerCap){ gCap+=d.powerCap; gStored+=b.stored; } }
@@ -623,6 +681,9 @@ function tickWork(dt){
       else if(powered){ b.t+=dt; if(b.t>=s.time){ b.t=0; if(!spawnOut(b,s.out)) b.outBuf=1; } }
     } else if(b.kind==="gastank"){
       tankEmit(b);
+    } else if(b.kind==="chemfab"){ // wandelt eingehende Roh-Chemikalien in Vorräte um (Modus „schwer")
+      if(b.powered && b.want){ b.t+=dt; if(b.t>=CHEM_TIME){ b.t=0;
+        for(const kk of CHEM_KEYS){ if((b.buf[kk]||0)>0){ b.buf[kk]--; SUP[kk].stock+=CHEM_YIELD; } } } }
     } else if(b.kind==="electrolyseur"){
       electroEmit(b);
       const r=RECIPES.electrolyseur;
@@ -644,6 +705,7 @@ function autoBuy(dt){
   if(!document.getElementById('autobuy').checked) return;
   autoTimer+=dt; if(autoTimer<0.5) return; autoTimer=0;
   for(const key in SUP){ const s=SUP[key];
+    if(game.difficulty==="hard" && key!=="hcl" && key!=="ar") continue; // im Modus „schwer" nur HCl & Ar kaufbar
     if(s.stock<25){ const batch=40, cost=batch*s.price; if(game.money>=cost){ s.stock+=batch; game.money-=cost; } }
   }
 }
@@ -654,6 +716,7 @@ function statusOf(b){
   if(d.powerUse && !b.powered) return b.wired?["kein Strom",0xff5d6c]:["nicht verbunden",0xff5d6c];
   if(b.kind==="electrolyseur"){ if((b.h2Buf||0)>0||(b.o2Buf||0)>0) return ["gibt H₂/O₂ ab",0x44ff88]; if((b.buf.water||0)>=2) return ["läuft",0x44ff88]; return ["wartet auf Wasser",0xff5d6c]; }
   if(b.kind==="gastank"){ return ["🛢️ H₂ "+Math.round(b.buf.h2||0)+" · O₂ "+Math.round(b.buf.o2||0)+((b.buf.water|0)?(" · 💧"+Math.round(b.buf.water)):""),0x44ff88]; }
+  if(b.kind==="chemfab"){ const tot=CHEM_KEYS.reduce((s,kk)=>s+(b.buf[kk]||0),0); return tot>0?["wandelt um",0x44ff88]:["wartet auf Rohstoffe",0xffd24a]; }
   if(SOURCES[b.kind]){ if(b.outBuf>0) return ["Ausgang voll",0xffd24a]; return ["läuft",0x44ff88]; }
   if(RECIPES[b.kind]){
     if(b.outBuf>0) return ["Ausgang voll",0xffd24a];
@@ -792,7 +855,7 @@ function updateGhost(){
   // Band/Rohr: Geometrie ist bereits weltausgerichtet → bei Richtungswechsel neu bauen (keine Gruppen-Rotation!)
   if(tool==="belt"||tool==="pipe"){
     if(ghost.userData.gdir!==placeDir){ (tool==="belt"?buildBeltVisual:buildPipeVisual)(ghost, placeDir, null); dimGhost(ghost); ghost.userData.gdir=placeDir; }
-  } else if(tool!=="delete"){ ghost.rotation.y=ROT[placeDir]; }
+  } else if(tool!=="delete" && tool!=="chemfab"){ ghost.rotation.y=ROT[placeDir]; }
   const sz=(tool!=="delete"&&DEF[tool]&&DEF[tool].size)||[1,1];
   const x=hoverTile.x,z=hoverTile.z;
   const cwx=(x+(sz[0]-1)/2 - HALF)*S, cwz=(z+(sz[1]-1)/2 - HALF)*S;
@@ -836,6 +899,7 @@ const WHY = {
   fab:"Belichtet, ätzt und dotiert die Wafer zu fertigen Schaltungen.",
   packaging:"Verpackt den Chip schützend in ein Gehäuse.",
   seller:"Verkauft fertige Chips und bringt dir Geld.",
+  chemfab:"Nur im schweren Modus: Verarbeitet die 8 chemischen Rohstoff-Vorkommen (per ➤ Förderband zugeführt) und füllt damit die Vorräte (N₂, Fluor, Photoresist, Bor, Phosphor, Arsen, Kupfer, Epoxidharz) wieder auf — diese sind im schweren Modus nicht kaufbar. Belegt 8×3 Felder, braucht 200 ⚡.",
   delete:"Reißt Gebäude ab (50 % der Kosten zurück).",
 };
 function infoHTML(kind){
@@ -850,6 +914,7 @@ function infoHTML(kind){
   if(d.powerGen) prod.push(d.powerGen+" ⚡"+(kind==="solar"?" (tagsüber)":kind==="nuclear"?" (24/7)":""));
   if(d.powerCap) prod.push("speichert "+d.powerCap+" ⚡");
   if(kind==="seller") prod.push("+"+CHIP_PRICE+" 💵 pro Chip");
+  if(kind==="chemfab"){ cons.push("Roh-Chemikalien (8 Vorkommen)"); prod.push("füllt Vorräte auf (N₂ · Fluor · Photoresist · Bor · Phosphor · Arsen · Kupfer · Epoxidharz)"); }
   const fp=d.size?` · belegt ${d.size[0]*d.size[1]} Felder (${d.size[0]}×${d.size[1]})`:(kind==="electrolyseur"?" · belegt 3 Felder (H₂- & O₂-Rohr fest verbaut)":"");
   return `<h3>${d.ic} ${d.name}</h3>`+
     `<div class="cost">${kind==="delete"?"":d.cost+" 💵"}${fp}</div>`+
@@ -861,7 +926,7 @@ function showInfo(kind){ document.getElementById('info').innerHTML=infoHTML(kind
 function buildHotbar(){
   const hb=document.getElementById('hotbar'); hb.innerHTML="";
   const keyFor = kk=> Object.keys(KEYMAP).find(x=>KEYMAP[x]===kk);
-  for(const kk of TOOLS){ const d=DEF[kk]||{name:"Abriss",ic:"❌",cost:0};
+  for(const kk of toolList()){ const d=DEF[kk]||{name:"Abriss",ic:"❌",cost:0};
     const el=document.createElement('div'); el.className="tool"+(kk==="delete"?" del":""); el.dataset.k=kk;
     const ky=keyFor(kk);
     el.innerHTML=`<div class="ky">${ky?ky.toUpperCase():""}</div><div class="ic">${d.ic}</div><div class="nm">${d.name}</div>`+
@@ -880,7 +945,8 @@ function buildSupplies(){
   const list=document.getElementById('sup-list'); list.innerHTML="";
   for(const key in SUP){ const s=SUP[key];
     const el=document.createElement('div'); el.className="sup"; el.id="sup-"+key;
-    el.innerHTML=`<span class="nm">${s.name}</span><span class="st">0</span>`; list.appendChild(el);
+    const chem = game.difficulty==="hard" && key!=="hcl" && key!=="ar"; // nicht kaufbar → kommt aus der Chemiefabrik
+    el.innerHTML=`<span class="nm">${chem?'🧪 ':''}${s.name}</span><span class="st">0</span>`; list.appendChild(el);
   }
 }
 function updateSupplies(){
@@ -916,6 +982,7 @@ function labelHTML(b){
   else if(b.kind==="nuclear") out+=`<br><span class="p">+${d.powerGen} ⚡ Strom (24/7)</span>`;
   else if(b.kind==="electrolyseur") out+=`<br><span class="p">→ H₂ (vorne) · O₂ (hinten)</span><br><span class="u">braucht Wasser · -${d.powerUse} ⚡</span>`;
   else if(b.kind==="gastank") out+=`<br><span class="p">Gas-Puffer</span><br><span class="u">H₂ ${Math.round(b.buf.h2||0)} · O₂ ${Math.round(b.buf.o2||0)} / ${GAS_CAP}</span>`;
+  else if(b.kind==="chemfab"){ const tot=CHEM_KEYS.reduce((s,kk)=>s+(b.buf[kk]||0),0); out+=`<br><span class="p">füllt Vorräte auf</span><br><span class="u">Puffer ${tot} · -${d.powerUse} ⚡</span>`; }
   else if(SOURCES[b.kind]) out+=`<br><span class="p">→ ${ITEMS[SOURCES[b.kind].out].name}</span><br><span class="u">-${d.powerUse} ⚡</span>`;
   else if(RECIPES[b.kind]){ const r=RECIPES[b.kind];
     out+=`<br><span class="p">→ ${ITEMS[r.out].name}${r.outCount?(" ×"+r.outCount):""}</span>`;
@@ -956,6 +1023,11 @@ function nextTip(){
     ["siemens","⚗️ <b>Siemens-Reaktor</b> — braucht Rohsilizium (Band) UND Wasserstoff (🚰 Rohr vom Elektrolyseur)"],["crystal","💎 <b>Kristallzieher</b> (→ Barren)"],
     ["waferplant","🥞 <b>Wafer-Werk</b> — braucht den Barren UND Wasser (🚰 Rohr von einer Pumpe)"],["fab","🔬 <b>Frontend-Fab</b> — braucht Wafer, Wasser und Sauerstoff (🚰 Rohre)"],["packaging","📦 <b>Packaging</b> (→ Chip)"]];
   for(const [kk,desc] of chain){ if(cnt(kk)===0) return "Baue als Nächstes: "+desc+"."; }
+  if(game.difficulty==="hard"){
+    if(cnt("chemfab")===0) return "🧪 Baue eine <b>Chemiefabrik</b> (8×3) und leite die chemischen Vorkommen per ➤ Band hinein — sie füllt die nicht kaufbaren Vorräte (N₂, Fluor, Bor …) wieder auf.";
+    const fabWait=buildings.find(b=>b.kind==="fab" && statusOf(b)[0].startsWith("Vorrat leer"));
+    if(fabWait) return "🧪 Deiner <b>Frontend-Fab</b> fehlen Vorräte — verbinde mehr Chemie-Vorkommen per ➤ Band mit der <b>Chemiefabrik</b>.";
+  }
   if(cnt("electrolyseur")===0) return "💠 Wasserstoff & Sauerstoff gibt es nicht mehr im Vorrat! Baue einen <b>Elektrolyseur</b>, leite per 🚰 Rohr Wasser hinein — er gibt H₂ und O₂ in Rohre ab.";
   if(cnt("seller")===0) return "🚚 Baue einen <b>Versand</b> und leite die Chips dorthin — so verdienst du Geld.";
   const dry=buildings.find(b=>b.kind==="electrolyseur" && statusOf(b)[0]==="wartet auf Wasser");
@@ -1008,23 +1080,32 @@ document.getElementById('chaintext').innerHTML =
  `Taste <b>T</b> gibt dir jederzeit einen Tipp, was als Nächstes sinnvoll ist.`;
 /* ===================== ROHSTOFFE ZUFÄLLIG VERTEILEN ===================== */
 function addPatch(kind,x,z){ // Boden-Markierung für das Vorkommen
-  const col = kind==="sandmine"?0xc4a661 : kind==="coalmine"?0x1c1c1c : 0x2f7fb0;
+  const col = kind==="sandmine"?0xc4a661 : kind==="coalmine"?0x1c1c1c : kind==="pump"?0x2f7fb0 : (DEF[kind]?DEF[kind].col:0x888888);
   const m=new THREE.Mesh(new THREE.CircleGeometry(.66,22), new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.4}));
   m.rotation.x=-Math.PI/2; const [wx,wz]=tileToWorld(x,z); m.position.set(wx,.02,wz); scene.add(m); patches.push(m);
 }
 function scatterResources(){
-  const want=[["sandmine",5],["coalmine",3],["pump",3]]; // 10% mehr Quellen (11 statt 10)
-  const placed=[]; const minDist=5;                       // größere Abstände
+  const hard = game.difficulty==='hard';
+  // „einfach" unverändert; „schwer": 4× Feld → mehr Basisquellen + die 8 Chemie-Vorkommen (je 3, gleichmäßig verteilt)
+  const want = hard
+    ? [["sandmine",8],["coalmine",6],["pump",6], ...CHEM_KEYS.map(kk=>['dep_'+kk,3])]
+    : [["sandmine",5],["coalmine",3],["pump",3]]; // 10% mehr Quellen (11 statt 10)
+  const placed=[];                          // alle Quellen (Mindestabstand zueinander)
+  const byType={};                          // je Typ (größerer Abstand → ausgeglichene Verteilung)
+  const minDist = hard?4:5;                 // Abstand zwischen beliebigen Quellen
+  const sameDist = hard?11:5;               // Abstand zwischen gleichartigen Quellen
   for(const [kind,num] of want){
+    byType[kind]=byType[kind]||[];
     let made=0, tries=0;
-    while(made<num && tries<500){ tries++;
+    while(made<num && tries<2000){ tries++;
       const x=2+Math.floor(Math.random()*(N-4)), z=2+Math.floor(Math.random()*(N-4));
       if(grid_.get(k(x,z))) continue;
       if(placed.some(p=>Math.abs(p[0]-x)+Math.abs(p[1]-z)<minDist)) continue;
+      if(byType[kind].some(p=>Math.abs(p[0]-x)+Math.abs(p[1]-z)<sameDist)) continue;
       let dir = x<N/2 ? 1 : 3; // Ausgaberichtung Richtung Kartenmitte
       if(SOURCES[kind]){ const fx=x+DIRS[dir][0], fz=z+DIRS[dir][1]; if(!inBounds(fx,fz)||grid_.get(k(fx,fz))) continue; }
       placeDir=dir;
-      if(place(kind,x,z,true)){ addPatch(kind,x,z); placed.push([x,z]); made++; }
+      if(place(kind,x,z,true)){ addPatch(kind,x,z); placed.push([x,z]); byType[kind].push([x,z]); made++; }
     }
   }
   placeDir=1; // zurücksetzen
@@ -1054,12 +1135,14 @@ function clearFactory(){
 }
 function loadGame(d){
   if(!d||!Array.isArray(d.buildings)) return false;
+  game.difficulty=d.difficulty||'easy';
+  applyDifficulty(game.difficulty);   // Feldgröße + Hotbar + Vorräte-Panel passend zum Modus (vor dem Platzieren!)
   clearFactory();
   for(const sb of d.buildings){ placeDir=(sb.dir==null?1:sb.dir); // 0 (Nord) NICHT als falsy behandeln!
     if(place(sb.kind,sb.x,sb.z,true)){ const nb=grid_.get(k(sb.x,sb.z)); if(nb){
       nb.buf=sb.buf||{}; nb.outBuf=sb.outBuf||0; nb.outType=sb.outType||null; nb.stored=sb.stored||0;
       nb.h2Buf=sb.h2Buf||0; nb.o2Buf=sb.o2Buf||0; nb.t=sb.t||0; nb.fixed=!!sb.fixed;
-      if(nb.fixed && (nb.kind==="sandmine"||nb.kind==="coalmine"||nb.kind==="pump")) addPatch(nb.kind,nb.x,nb.z);
+      if(nb.fixed && SOURCES[nb.kind]) addPatch(nb.kind,nb.x,nb.z);
     } } }
   placeDir=1;
   for(const si of (d.items||[])){ const t=grid_.get(k(si.x,si.z)); if(t&&(t.kind==="belt"||t.kind==="pipe")) makeItem(si.type,si.x,si.z,si.prog); }
@@ -1093,8 +1176,23 @@ document.getElementById('load-btn').onclick=()=>document.getElementById('load-fi
 document.getElementById('load-file').onchange=e=>{ const f=e.target.files[0]; e.target.value=""; if(!f) return;
   const r=new FileReader(); r.onload=()=>{ try{ if(!loadGame(JSON.parse(r.result))) toast("Ungültige Spielstand-Datei.",0xff5d6c); }catch(err){ toast("Ungültige Spielstand-Datei.",0xff5d6c); } }; r.readAsText(f); };
 function setModeTitle(){ document.getElementById('title').textContent="CHIPTORIO · "+(game.difficulty==='hard'?"SCHWER":"EINFACH"); }
-function startFactory(diff){ game.difficulty=diff; setModeTitle(); document.getElementById('intro').classList.add('hide'); started=true; if(musicOn) playTrack();
-  toast((diff==='hard'?"🔴 Schwer":"🟢 Einfach")+" — Sand, Kohle & Wasser liegen auf der Karte. Baue ☀️ Solar, verlege 🔌 Kabel & ➤ Bänder. Taste T = Tipp.",0x34e0c0); }
+// Modus-Setup (Feldgröße, Hotbar, Vorräte-Panel) — KEINE Zustands-/Geld-Änderung (das macht startFactory bzw. loadGame).
+function applyDifficulty(diff){
+  game.difficulty=diff;
+  setFieldSize(diff==='hard'?46:23);
+  if(diff==='hard'){ camera.position.set(0,34,32); controls.target.set(0,0,0); }
+  buildHotbar(); buildSupplies(); selectTool(toolList().includes(tool)?tool:"belt"); setModeTitle();
+}
+function resetSupplies(diff){ for(const kk in SUP){ SUP[kk].stock = (diff==='hard' && kk!=='hcl' && kk!=='ar') ? 0 : 80; } }
+function startFactory(diff){
+  applyDifficulty(diff);
+  game.money = diff==='hard'?HARD_MONEY:5500; game.chips=0; game.soldWindow=[]; resetSupplies(diff);
+  if(diff==='hard'){ clearFactory(); scatterResources(); } // schweres Feld neu erzeugen; „einfach" nutzt die beim Laden erzeugte Karte
+  document.getElementById('intro').classList.add('hide'); started=true; if(musicOn) playTrack();
+  toast(diff==='hard'
+    ? "🔴 Schwer — nur HCl & Argon kaufbar. Leite die 8 Chemie-Vorkommen per ➤ Band in die 🧪 Chemiefabrik. Feld 4× so groß. Taste T = Tipp."
+    : "🟢 Einfach — Sand, Kohle & Wasser liegen auf der Karte. Baue ☀️ Solar, verlege 🔌 Kabel & ➤ Bänder. Taste T = Tipp.",0x34e0c0);
+}
 document.getElementById('start-easy').onclick=()=>startFactory('easy');
 document.getElementById('start-hard').onclick=()=>startFactory('hard');
 
