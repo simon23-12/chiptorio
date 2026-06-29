@@ -301,15 +301,19 @@ function toolList(){ // Chemiefabrik + Upgrade-Werkzeug nur im Modus „schwer"
 const GAS_CAP = 2000; // Gastank-Kapazität je Gas im Modus „einfach" (sehr groß = "Abfluss")
 
 // ---- Upgrades / Tech-Tree (nur Modus „schwer"; in „einfach" bleiben alle Stufen 1 = neutral) ----
-const SOLAR_MULT=[1,1.10,1.25], CARRIER_MULT=[1,1.5,2.0], MACHINE_MULT=[1,1.4,1.8], GAS_CAP_HARD=[300,800,2000];
+const SOLAR_MULT=[1,1.10,1.25], CARRIER_MULT=[1,1.5,2.0], MACHINE_MULT=[1,1.4,1.8], CAP_MULT=[1,1.5,2.0], GAS_CAP_HARD=[300,800,2000];
+const TECH_KEYS=['solar','battery','gastank','belt','pipe'];
 const solarMult =()=>SOLAR_MULT[(game.tech.solar||1)-1];
 const beltMult  =()=>CARRIER_MULT[(game.tech.belt||1)-1];
 const pipeMult  =()=>CARRIER_MULT[(game.tech.pipe||1)-1];
+const batMult   =()=>CAP_MULT[(game.tech.battery||1)-1];
 const machineMult=lvl=>MACHINE_MULT[(lvl||1)-1];
+const capOf     =b=> (DEF[b.kind].powerCap||0)*batMult();      // effektive Akku-Kapazität (inkl. Upgrade)
 const gasCap    =()=> game.difficulty==='hard' ? GAS_CAP_HARD[(game.tech.gastank||1)-1] : GAS_CAP;
-const TECH_COST={ solar:[800,2000], gastank:[600,1500], belt:[1200,3000], pipe:[1000,2500] }; // Kosten Stufe1→2, Stufe2→3
+const TECH_COST={ solar:[800,2000], battery:[700,1800], gastank:[600,1500], belt:[1200,3000], pipe:[1000,2500] }; // Kosten Stufe1→2, Stufe2→3
 const TECH_INFO={
   solar:  {name:'Solarzellen',        ic:'☀️', eff:l=>['Basis-Ertrag','+10 % Ertrag','+25 % Ertrag'][l-1]},
+  battery:{name:'Energiespeicher',    ic:'🔋', eff:l=>'Kapazität ×'+CAP_MULT[l-1].toFixed(2)+' ('+(DEF.battery.powerCap*CAP_MULT[l-1])+' ⚡)'},
   gastank:{name:'Gastank-Kapazität',  ic:'🛢️', eff:l=>GAS_CAP_HARD[l-1]+' Gas / Tank'},
   belt:   {name:'Förderbänder',       ic:'➤', eff:l=>'Transport ×'+CARRIER_MULT[l-1].toFixed(2)},
   pipe:   {name:'Rohre',              ic:'🚰', eff:l=>'Transport ×'+CARRIER_MULT[l-1].toFixed(2)},
@@ -317,7 +321,7 @@ const TECH_INFO={
 const KEYMAP = {}; // Bauteile werden per Mausklick in der Leiste gewählt — keine Hotkeys (Tasten gehören der Navigation)
 
 const DAYLEN = 100; // Sekunden pro Tag/Nacht-Zyklus
-const game = { money:5500, chips:0, made:{}, goalsDone:{}, tech:{solar:1,gastank:1,belt:1,pipe:1},
+const game = { money:5500, chips:0, made:{}, goalsDone:{}, tech:{solar:1,battery:1,gastank:1,belt:1,pipe:1},
   powerGen:0, powerDemand:0, powerOK:true, rate:0, soldWindow:[],
   storedPower:0, powerCap:0, timeOfDay:0.33, sun:1, speed:1, difficulty:'easy' };
 
@@ -354,7 +358,8 @@ function setFieldSize(n){
   if(ground){ scene.remove(ground); ground.geometry.dispose(); }
   if(grid){ scene.remove(grid); grid.geometry.dispose(); }
   ground = new THREE.Mesh(new THREE.PlaneGeometry(N*S, N*S),
-    new THREE.MeshStandardMaterial({color:0x12203a, roughness:.95}));
+    // emissiver Boden: bleibt auch nachts (wenn die Lichter gedimmt sind) deutlich heller als der Hintergrund
+    new THREE.MeshStandardMaterial({color:0x1b2f50, roughness:.95, emissive:0x233a60, emissiveIntensity:.7}));
   ground.rotation.x = -Math.PI/2; ground.position.y = 0; scene.add(ground);
   grid = new THREE.GridHelper(N*S, N, 0x6e93cc, 0x47659a); // heller, hebt sich nachts besser ab
   grid.position.y = 0.01; grid.material.transparent=true; grid.material.opacity=.62; scene.add(grid);
@@ -618,9 +623,10 @@ function tryDeposit(type,nx,nz,fx,fz){
   const nb=grid_.get(k(nx,nz)); if(!nb) return false;
   if(nb.kind==="belt"||nb.kind==="pipe"){
     if(!carrierOk(nb,type)) return false;
-    // NUR exportieren, wenn das Band/Rohr vom Quellfeld WEGführt (dir zeigt von der Quelle weg).
-    // Verhindert, dass Rohstoffe auf bloß „vorbeilaufende" (quer verlegte) Bahnen geworfen werden.
-    if(DIRS[nb.dir][0]!==nx-fx || DIRS[nb.dir][1]!==nz-fz) return false;
+    // NUR exportieren, wenn das Band/Rohr dieses Quellfeld als Zufluss „ansaugt" (gerade ODER als Kurve).
+    // Verhindert Auswurf auf bloß „vorbeilaufende" Bahnen, erlaubt aber kurvige Export-Ausgänge.
+    let s0=-1; for(let s=0;s<4;s++){ if(DIRS[s][0]===fx-nx && DIRS[s][1]===fz-nz){ s0=s; break; } } // Seite des Bandes, die zur Quelle zeigt
+    if((nb.kind==="belt"?beltInflow(nb):pipeInflow(nb))!==s0) return false;
     if(occupiedStart(nx,nz)) return false;
     makeItem(type,nx,nz,0.05); return true;
   }
@@ -714,17 +720,17 @@ function computeUtilities(dt){
   }
   let gGen=0,gDem=0,anyUnpowered=false;
   for(const r in nets){ const net=nets[r];
-    const cap=net.bats.reduce((s,b)=>s+DEF[b.kind].powerCap,0);
+    const cap=net.bats.reduce((s,b)=>s+capOf(b),0);
     let stored=net.bats.reduce((s,b)=>s+b.stored,0);
     const surplus=net.gen-net.dem; let ok;
     if(surplus>=0){ ok=true; const room=cap-stored; if(room>0){ const give=Math.min(surplus*dt*0.9,room);
-        for(const b of net.bats){ const c=DEF[b.kind].powerCap, free=c-b.stored; b.stored=Math.min(c, b.stored+give*(free/room)); } } }
+        for(const b of net.bats){ const c=capOf(b), free=c-b.stored; b.stored=Math.min(c, b.stored+give*(free/room)); } } }
     else { const deficit=-surplus; if(stored>0){ ok=true; const take=Math.min(deficit*dt,stored);
         for(const b of net.bats){ b.stored=Math.max(0, b.stored - take*(b.stored/stored)); } } else ok=false; }
     for(const b of net.cons){ b.powered=ok; const w = (RECIPES[b.kind]||b.kind==="chemfab")?b.want:true; if(!ok && w) anyUnpowered=true; }
     gGen+=net.gen; gDem+=net.dem;
   }
-  let gCap=0,gStored=0; for(const b of buildings){ const d=DEF[b.kind]; if(d.powerCap){ gCap+=d.powerCap; gStored+=b.stored; } }
+  let gCap=0,gStored=0; for(const b of buildings){ const d=DEF[b.kind]; if(d.powerCap){ gCap+=capOf(b); gStored+=b.stored; } }
   game.powerGen=gGen; game.powerDemand=gDem; game.powerCap=gCap; game.storedPower=gStored; game.powerOK=!anyUnpowered;
   // Wasser ist kein globales Netz mehr — es fließt als Item durch Rohre (Pumpe → Elektrolyseur/Wafer-Werk/Fab).
 }
@@ -785,7 +791,7 @@ function statusOf(b){
   if(b.kind==="seller") return ["bereit",0x44ff88];
   if(b.kind==="solar"){ if(!b.wired) return ["nicht verbunden",0xffd24a]; return game.sun>0.06?["☀️ "+Math.round(DEF.solar.powerGen*game.sun),0x44ff88]:["🌙 nachts inaktiv",0x5aa9ff]; }
   if(b.kind==="nuclear") return b.wired?["☢️ "+DEF.nuclear.powerGen,0x44ff88]:["nicht verbunden",0xffd24a];
-  if(b.kind==="battery"){ if(!b.wired) return ["nicht verbunden",0xffd24a]; const p=Math.round(b.stored/DEF.battery.powerCap*100); return ["🔋 "+p+"%", p>15?0x44ff88:0xffd24a]; }
+  if(b.kind==="battery"){ if(!b.wired) return ["nicht verbunden",0xffd24a]; const p=Math.round(b.stored/capOf(b)*100); return ["🔋 "+p+"%", p>15?0x44ff88:0xffd24a]; }
   return ["",0x44ff88];
 }
 function updateIndicators(){
@@ -950,7 +956,11 @@ function updateTip(e){
       const ks=Object.keys(cnt);
       extra="\nInhalt: "+(ks.length?ks.map(kk=>ITEMS[kk].name+(cnt[kk]>1?" ×"+cnt[kk]:"")).join(", "):"leer");
     }
-    if(game.difficulty==='hard' && (RECIPES[b.kind]||b.kind==='electrolyseur'||b.kind==='chemfab')){ extra+="\nSpeed: Stufe "+(b.speedLvl||1)+"/3 (⬆️-Werkzeug)"; }
+    if(game.difficulty==='hard' && (RECIPES[b.kind]||b.kind==='electrolyseur'||b.kind==='chemfab')){
+      const lvl=b.speedLvl||1;
+      extra+="\nSpeed: Stufe "+lvl+"/3 (×"+MACHINE_MULT[lvl-1].toFixed(2)+")";
+      if(tool==='upgrade') extra+= lvl>=3 ? "\n⬆️ max. Stufe erreicht" : "\n⬆️ Upgrade → Stufe "+(lvl+1)+": "+Math.round(DEF[b.kind].cost*(lvl===1?0.75:1.5))+" 💵";
+    }
     tipEl.style.display="block"; tipEl.style.left=(e.clientX+14)+"px"; tipEl.style.top=(e.clientY+14)+"px";
     tipEl.innerHTML=`<b>${DEF[b.kind].ic} ${DEF[b.kind].name}</b>`+((st||extra)?`<br><span class="s">${st}${extra.replace(/\n/g,"<br>")}</span>`:"");
   } else tipEl.style.display="none";
@@ -1068,7 +1078,7 @@ function labelHTML(b){
     if(d.powerUse) out+=`<br><span class="u">-${d.powerUse} ⚡</span>`;
   }
   else if(b.kind==="seller") out+=`<br><span class="p">Chip → +${CHIP_PRICE} 💵</span>`;
-  else if(b.kind==="battery"){ const p=Math.round(b.stored/d.powerCap*100); out+=`<br><span class="p">🔋 geladen ${p}%</span><br><span class="u">Kapazität ${d.powerCap} ⚡</span>`; }
+  else if(b.kind==="battery"){ const c=capOf(b), p=Math.round(b.stored/c*100); out+=`<br><span class="p">🔋 geladen ${p}%</span><br><span class="u">Kapazität ${Math.round(c)} ⚡${batMult()>1?" (Lv "+(game.tech.battery)+")":""}</span>`; }
   if(game.difficulty==='hard' && (RECIPES[b.kind]||b.kind==='electrolyseur'||b.kind==='chemfab') && (b.speedLvl||1)>1) out+=`<br><span class="p">⬆️ Speed Stufe ${b.speedLvl}/3</span>`;
   const st=statusOf(b)[0];
   if(st==="nicht verbunden") out+=`<br><span class="w">🔌 nicht ans Stromnetz angeschlossen</span>`;
@@ -1155,7 +1165,7 @@ function renderGoals(){ for(const g of goalList()){ const d=document.getElementB
 
 /* ===================== TECH-TREE (nur schwer) ===================== */
 function renderTech(){ const grid=document.getElementById('tt-grid'); grid.innerHTML="";
-  for(const key of ['solar','gastank','belt','pipe']){ const lvl=game.tech[key]||1, info=TECH_INFO[key];
+  for(const key of TECH_KEYS){ const lvl=game.tech[key]||1, info=TECH_INFO[key];
     const pips=[0,1,2].map(i=>`<div class="pip${i<lvl?' on':''}"></div>`).join("");
     const maxed=lvl>=3, cost=maxed?0:TECH_COST[key][lvl-1];
     const card=document.createElement('div'); card.className="tt-card";
@@ -1166,6 +1176,9 @@ function renderTech(){ const grid=document.getElementById('tt-grid'); grid.inner
   }
   grid.querySelectorAll('.tt-buy[data-k]').forEach(btn=>btn.onclick=()=>buyTech(btn.dataset.k));
 }
+// Nur die Kaufbarkeit (disabled) je Frame aktualisieren — KEIN DOM-Neuaufbau, sonst „verschluckt" der Re-Render den Klick.
+function refreshTechButtons(){ document.querySelectorAll('#tt-grid .tt-buy[data-k]').forEach(btn=>{
+  const key=btn.dataset.k, lvl=game.tech[key]||1; if(lvl>=3) return; btn.disabled = game.money<TECH_COST[key][lvl-1]; }); }
 function buyTech(key){ const lvl=game.tech[key]||1; if(lvl>=3) return; const cost=TECH_COST[key][lvl-1];
   if(game.money<cost){ toast("Zu wenig Geld für Upgrade ("+cost+" 💵).",0xff5d6c); return; }
   game.money-=cost; game.tech[key]=lvl+1; toast("🔬 "+TECH_INFO[key].name+" → Stufe "+(lvl+1),0x34e0c0); renderTech();
@@ -1193,7 +1206,7 @@ function loop(){
     updateHUD();
     updateLabels();
     updateGoals(); renderGoals();
-    if(!document.getElementById('techtree').classList.contains('hide')) renderTech();
+    if(!document.getElementById('techtree').classList.contains('hide')) refreshTechButtons();
   }
   // Belt-Pfeile pulsieren
   const pulse=.6+.4*Math.sin(performance.now()*.006);
@@ -1280,7 +1293,7 @@ function loadGame(d){
   placeDir=1;
   for(const si of (d.items||[])){ const t=grid_.get(k(si.x,si.z)); if(t&&(t.kind==="belt"||t.kind==="pipe")) makeItem(si.type,si.x,si.z,si.prog); }
   game.money=(d.money!=null?d.money:game.money); game.chips=d.chips||0; game.timeOfDay=d.timeOfDay||0.33; game.speed=1; game.soldWindow=[]; game.difficulty=d.difficulty||'easy';
-  game.made=d.made||{}; game.goalsDone=d.goalsDone||{}; game.tech=Object.assign({solar:1,gastank:1,belt:1,pipe:1}, d.tech||{}); buildGoals();
+  game.made=d.made||{}; game.goalsDone=d.goalsDone||{}; game.tech=Object.assign({solar:1,battery:1,gastank:1,belt:1,pipe:1}, d.tech||{}); buildGoals();
   for(const kk in SUP){ if(d.sup && d.sup[kk]!=null) SUP[kk].stock=d.sup[kk]; }
   const ab=document.getElementById('autobuy'); if(ab && d.autobuy!=null) ab.checked=d.autobuy;
   document.querySelectorAll('#speedctl .spd').forEach(e=>e.classList.toggle('sel', e.dataset.s==='1'));
@@ -1323,7 +1336,7 @@ function resetSupplies(diff){ for(const kk in SUP){ SUP[kk].stock = (diff==='har
 function startFactory(diff){
   applyDifficulty(diff);
   game.money = diff==='hard'?HARD_MONEY:5500; game.chips=0; game.soldWindow=[]; resetSupplies(diff);
-  game.made={}; game.goalsDone={}; game.tech={solar:1,gastank:1,belt:1,pipe:1};
+  game.made={}; game.goalsDone={}; game.tech={solar:1,battery:1,gastank:1,belt:1,pipe:1};
   if(diff==='hard'){ clearFactory(); scatterResources(); } // schweres Feld neu erzeugen; „einfach" nutzt die beim Laden erzeugte Karte
   document.getElementById('intro').classList.add('hide'); started=true; if(musicOn) playTrack();
   toast(diff==='hard'
