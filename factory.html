@@ -119,10 +119,11 @@
   /* Tech-Tree (nur schwer) */
   #tech-btn{pointer-events:auto;font-family:var(--sans);font-weight:600;font-size:12px;cursor:pointer;border:1px solid #6a4aa0;background:transparent;color:#b58fd6;padding:7px 12px;border-radius:9px}
   #tech-btn:hover{background:#1a1430;color:#d9b8ff}
-  #techtree{position:fixed;inset:0;z-index:35;pointer-events:auto;display:flex;align-items:center;justify-content:center;background:rgba(6,10,18,.82);backdrop-filter:blur(4px)}
-  #techtree .tt-panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px 22px;max-width:760px;width:92%;max-height:84vh;overflow:auto}
-  #techtree h2{margin:0 0 4px;font-size:20px;color:#d9b8ff}
-  #techtree .tt-sub{color:var(--dim);font-size:12px;margin:0 0 14px}
+  #techtree,#stats,#market{position:fixed;inset:0;z-index:35;pointer-events:auto;display:flex;align-items:center;justify-content:center;background:rgba(6,10,18,.82);backdrop-filter:blur(4px)}
+  #techtree.hide,#stats.hide,#market.hide{display:none!important}
+  .tt-panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px 22px;max-width:760px;width:92%;max-height:84vh;overflow:auto}
+  .tt-panel h2{margin:0 0 4px;font-size:20px;color:#d9b8ff}
+  .tt-panel .tt-sub{color:var(--dim);font-size:12px;margin:0 0 14px}
   .tt-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
   .tt-card{background:#0c1830;border:1px solid #2a3a5a;border-radius:12px;padding:12px 14px}
   .tt-card h3{margin:0 0 2px;font-size:14px}
@@ -134,6 +135,19 @@
   .tt-buy:hover{background:var(--acc);color:#04231f}
   .tt-buy:disabled{opacity:.4;cursor:default;border-color:#3a4a66;background:transparent;color:var(--dim)}
   .tt-close{float:right;cursor:pointer;border:1px solid #33486e;background:transparent;color:var(--dim);padding:6px 12px;border-radius:8px;font-weight:600}
+  #stats-btn,#market-btn{pointer-events:auto;font-family:var(--sans);font-weight:600;font-size:12px;cursor:pointer;border:1px solid #2c6e4a;background:transparent;color:var(--good);padding:7px 12px;border-radius:9px}
+  #market-btn{border-color:#7a6a2e;color:var(--warn)}
+  #stats-btn:hover{background:#0c2b1f} #market-btn:hover{background:#2a230c}
+  .st-sec{margin:14px 0 6px;font-size:12px;color:var(--dim);letter-spacing:1px;text-transform:uppercase}
+  .st-row{display:flex;justify-content:space-between;gap:10px;font-family:var(--mono);font-size:12px;padding:2px 0;border-bottom:1px solid #16223a}
+  .st-row b{color:var(--acc)} .st-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 22px}
+  #pwr-graph{position:relative;inset:auto;width:100%;height:120px;background:#0a1422;border:1px solid #1d2c44;border-radius:8px;display:block;z-index:auto}
+  .mk-row{display:grid;grid-template-columns:1.4fr .8fr .9fr .9fr;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #16223a;font-size:12px}
+  .mk-row .nm{color:var(--txt)} .mk-row .stk{font-family:var(--mono);color:var(--good)}
+  .mk-btn{cursor:pointer;font-weight:700;font-size:11px;border-radius:7px;padding:6px 8px;font-family:var(--mono)}
+  .mk-buy{border:1px solid #7a3a3a;background:#2b0c10;color:#ff9aa6} .mk-buy:hover{background:#ff5d6c;color:#240609}
+  .mk-sell{border:1px solid #2c6e4a;background:#0c2b1f;color:#7ee0a8} .mk-sell:hover{background:#46d97e;color:#053019}
+  .mk-btn:disabled{opacity:.4;cursor:default;filter:grayscale(.6)}
 </style>
 </head>
 <body>
@@ -145,6 +159,8 @@
     <input type="file" id="load-file" accept="application/json,.json" style="display:none">
     <button id="music-btn" class="ghost" title="Musik an/aus">🔊</button>
     <button id="tech-btn" class="hide" title="Tech-Tree (nur Modus „schwer")">🔬 Tech-Tree</button>
+    <button id="stats-btn" class="hide" title="Statistik (nur Modus „schwer")">📊 Statistik</button>
+    <button id="market-btn" class="hide" title="Handelsplatz (nur Modus „schwer")">🤝 Handel</button>
     <span id="title">CHIPTORIO · FABRIK</span>
     <div class="stat"><span class="lbl">GELD</span><b id="s-money" style="color:var(--good)">—</b></div>
     <div class="stat"><span class="lbl">⚡ STROM (kWh)</span><b id="s-power">—</b></div>
@@ -172,6 +188,20 @@
   <h2>🔬 Tech-Tree</h2>
   <p class="tt-sub">Globale Upgrades (nur Modus „schwer"). Einzelne Maschinen upgradest du mit dem ⬆️-Werkzeug per Klick.</p>
   <div class="tt-grid" id="tt-grid"></div>
+</div></div>
+
+<div id="stats" class="hide"><div class="tt-panel">
+  <button class="tt-close" id="stats-close">✕ Schließen</button>
+  <h2>📊 Statistik</h2>
+  <p class="tt-sub">Live-Übersicht deiner Fabrik (nur Modus „schwer").</p>
+  <div id="stats-body"></div>
+</div></div>
+
+<div id="market" class="hide"><div class="tt-panel">
+  <button class="tt-close" id="market-close">✕ Schließen</button>
+  <h2>🤝 Handelsplatz</h2>
+  <p class="tt-sub">Vorräte kaufen (teuer) &amp; verkaufen (günstig, mit fallendem Preis je mehr du verkaufst). Handel in 10er-Schritten.</p>
+  <div id="market-body"></div>
 </div></div>
 
 <div id="labels"></div>
@@ -336,7 +366,9 @@ const KEYMAP = {}; // Bauteile werden per Mausklick in der Leiste gewählt — k
 const DAYLEN = 100; // Sekunden pro Tag/Nacht-Zyklus
 const game = { money:5500, chips:0, made:{}, goalsDone:{}, tech:{solar:1,battery:1,gastank:1,belt:1,pipe:1,chip:1},
   powerGen:0, powerDemand:0, powerOK:true, rate:0, soldWindow:[],
-  storedPower:0, powerCap:0, timeOfDay:0.33, sun:1, speed:1, difficulty:'easy' };
+  storedPower:0, powerCap:0, timeOfDay:0.33, sun:1, speed:1, difficulty:'easy',
+  simTime:0, stats:{power:[],dem:[],rate:{},snap:{},acc:0}, market:{sat:{}} };
+function resetStatsMarket(){ game.simTime=0; game.stats={power:[],dem:[],rate:{},snap:{},acc:0}; game.market={sat:{}}; }
 
 /* ===================== THREE SETUP ===================== */
 const renderer = new THREE.WebGLRenderer({antialias:true});
@@ -440,7 +472,7 @@ function makeMesh(kind,dir){
     const ind=SP(.1,0x44ff88,{emissive:0x115522,emissiveIntensity:1}); add(ind,0,.92,0); g.userData.ind=ind;
     g.rotation.y=ROT[dir]; return g;
   }
-  if(kind==="chemfab"){ // Chemiefabrik 8×3 — achsenparallel (Footprint fix 8×3, daher keine Rotation)
+  if(kind==="chemfab"){ // Chemiefabrik 8×3 — per Q drehbar (quer/hochkant)
     const W=8*S, H=3*S;
     add(B(W-.2,.5,H-.2,0x3a4a5a,{roughness:.6}),0,.25,0);
     add(B(W-.7,.16,H-.7,0x4a5a6a),0,.55,0);
@@ -449,8 +481,8 @@ function makeMesh(kind,dir){
       add(C(.17,.19,.7,c,{metalness:.4,roughness:.45,emissive:c,emissiveIntensity:.2}),px,.95,-.55);
       add(C(.19,.19,.05,0x223040),px,1.32,-.55); }
     for(let i=0;i<4;i++){ const px=-W/2+1.2+i*2; add(C(.17,.17,1.1,0x6a7a8a,{metalness:.5}),px,1.05,.7); add(C(.19,.19,.08,0x90a0b0),px,1.62,.7); }
-    add(makeTextSprite("CHEMIE",0xbfe0ff),0,1.75,0);
     const ind=SP(.12,0x44ff88,{emissive:0x115522,emissiveIntensity:1}); add(ind,0,1.95,0); g.userData.ind=ind;
+    g.rotation.y=(dir===0||dir===2)?Math.PI/2:0; // hochkant bei Nord/Süd
     return g;
   }
   switch(kind){
@@ -671,10 +703,14 @@ function tankEmit(b){
   }
 }
 // Elektrolyseur (3 Felder): H₂ verlässt das vordere Rohr (+dir), O₂ das hintere Rohr (−dir).
+// Abgabe an JEDEN aufnehmenden Nachbarn der jeweiligen Rohr-Zelle (Rohr ODER Tank direkt am Rohr funktioniert).
 function electroEmit(b){
   const d=b.dir, o=(d+2)%4;
-  if((b.h2Buf||0)>0){ const cx=b.x+DIRS[d][0], cz=b.z+DIRS[d][1]; if(tryDeposit("h2", cx+DIRS[d][0], cz+DIRS[d][1], cx, cz)) b.h2Buf--; }
-  if((b.o2Buf||0)>0){ const cx=b.x+DIRS[o][0], cz=b.z+DIRS[o][1]; if(tryDeposit("o2", cx+DIRS[o][0], cz+DIRS[o][1], cx, cz)) b.o2Buf--; }
+  const own=new Set(b.cells.map(c=>c[0]+","+c[1]));
+  const tryEmit=(type,rx,rz)=>{ for(const dd of DIRS){ const nx=rx+dd[0], nz=rz+dd[1];
+    if(own.has(nx+","+nz)) continue; if(tryDeposit(type,nx,nz,rx,rz)) return true; } return false; };
+  if((b.h2Buf||0)>0){ const cx=b.x+DIRS[d][0], cz=b.z+DIRS[d][1]; if(tryEmit("h2",cx,cz)) b.h2Buf--; }
+  if((b.o2Buf||0)>0){ const cx=b.x+DIRS[o][0], cz=b.z+DIRS[o][1]; if(tryEmit("o2",cx,cz)) b.o2Buf--; }
 }
 
 function moveItems(dt){
@@ -725,6 +761,9 @@ function computeUtilities(dt){
   pbuild.forEach((b,i)=>{ b._pid="b"+i; ensure(b._pid); b.wired=false; });
   for(const b of pbuild){ for(const c of b.cells){ for(const dd of DIRS){ const nk=(c[0]+dd[0])+","+(c[1]+dd[1]);
     if(cableAt.has(nk)){ union(b._pid,"c:"+nk); b.wired=true; } } } }
+  // Direkt benachbarte Strom-Gebäude leiten Strom auch OHNE Kabel (z. B. Solar direkt an einer Maschine).
+  for(const b of pbuild){ for(const c of b.cells){ for(const dd of DIRS){ const nb=grid_.get(k(c[0]+dd[0],c[1]+dd[1]));
+    if(nb && nb!==b && nb._pid!==undefined){ union(b._pid,nb._pid); b.wired=true; nb.wired=true; } } } }
   const nets={};
   for(const b of pbuild){ const r=find(b._pid); const net=nets[r]||(nets[r]={gen:0,dem:0,bats:[],cons:[]}); const d=DEF[b.kind];
     if(d.powerGen) net.gen += d.powerGen*(b.kind==="solar"?game.sun*solarMult():1); // Solar: nachts 0 · Upgrade ×; AKW konstant
@@ -814,9 +853,11 @@ function updateIndicators(){
 }
 
 /* ===================== BAUEN / ABREISSEN ===================== */
+// Footprint (Breite/Tiefe) — nur die Chemiefabrik dreht ihren Grundriss mit (Q); andere Größen bleiben fix.
+function footprint(kind,dir){ const s=DEF[kind].size||[1,1]; return (kind==="chemfab" && (dir===0||dir===2)) ? [s[1],s[0]] : s; }
 function cellsFor(kind,x,z){
   if(kind==="electrolyseur"){ const f=DIRS[placeDir], b=DIRS[(placeDir+2)%4]; return [[x,z],[x+f[0],z+f[1]],[x+b[0],z+b[1]]]; } // Kern + H₂-Rohr vorne + O₂-Rohr hinten
-  const sz=DEF[kind].size||[1,1]; const c=[]; for(let i=0;i<sz[0];i++)for(let j=0;j<sz[1];j++)c.push([x+i,z+j]); return c;
+  const sz=footprint(kind,placeDir); const c=[]; for(let i=0;i<sz[0];i++)for(let j=0;j<sz[1];j++)c.push([x+i,z+j]); return c;
 }
 function place(kind,x,z,free){
   const cells=cellsFor(kind,x,z);
@@ -830,7 +871,7 @@ function place(kind,x,z,free){
     if(game.money < cost){ toast("Zu wenig Geld für "+DEF[kind].name+" ("+cost+" 💵)",0xff5d6c); return false; }
     game.money -= cost;
   }
-  const sz=DEF[kind].size||[1,1];
+  const sz=footprint(kind,placeDir);
   const mesh = makeMesh(kind,placeDir);
   let cwx,cwz;
   if(kind==="electrolyseur"){ [cwx,cwz]=tileToWorld(x,z); } // Kern (Mitte der 3er-Reihe)
@@ -952,8 +993,9 @@ function updateGhost(){
   // Band/Rohr: Geometrie ist bereits weltausgerichtet → bei Richtungswechsel neu bauen (keine Gruppen-Rotation!)
   if(tool==="belt"||tool==="pipe"){
     if(ghost.userData.gdir!==placeDir){ (tool==="belt"?buildBeltVisual:buildPipeVisual)(ghost, placeDir, null); dimGhost(ghost); ghost.userData.gdir=placeDir; }
-  } else if(tool!=="delete" && tool!=="upgrade" && tool!=="chemfab"){ ghost.rotation.y=ROT[placeDir]; }
-  const sz=(DEF[tool]&&DEF[tool].size)||[1,1];
+  } else if(tool==="chemfab"){ ghost.rotation.y=(placeDir===0||placeDir===2)?Math.PI/2:0; }
+  else if(tool!=="delete" && tool!=="upgrade"){ ghost.rotation.y=ROT[placeDir]; }
+  const sz=(tool!=="delete"&&tool!=="upgrade"&&DEF[tool])?footprint(tool,placeDir):[1,1];
   const x=hoverTile.x,z=hoverTile.z;
   const cwx=(x+(sz[0]-1)/2 - HALF)*S, cwz=(z+(sz[1]-1)/2 - HALF)*S;
   ghost.position.set(cwx, (tool==="delete"||tool==="upgrade")?.06:0, cwz);
@@ -1200,6 +1242,65 @@ function buyTech(key){ const lvl=game.tech[key]||1; if(lvl>=3) return; const cos
   game.money-=cost; game.tech[key]=lvl+1; toast("🔬 "+TECH_INFO[key].name+" → Stufe "+(lvl+1),0x34e0c0); renderTech();
 }
 
+/* ===================== STATISTIK (nur schwer) ===================== */
+const STAT_OUT=['mgsi','egsi','ingot','wafer','pwafer','chip'];          // produzierte Belt-Items
+const STAT_MACH=['furnace','siemens','crystal','waferplant','fab','packaging','electrolyseur','chemfab'];
+function renderStats(){
+  const s=game.stats, body=document.getElementById('stats-body'); const fmt=n=>Math.round((n||0)*10)/10;
+  const prod=STAT_OUT.map(it=>`<div class="st-row"><span>${ITEMS[it].name}</span><b>${fmt(s.rate[it])} /min</b></div>`).join("");
+  const eco=`<div class="st-row"><span>💵 Einnahmen</span><b>${Math.round(currentRate())} $/min</b></div>`
+    +`<div class="st-row"><span>💰 Kontostand</span><b>${Math.floor(game.money)} 💵</b></div>`
+    +`<div class="st-row"><span>🔲 Chips produziert</span><b>${game.made.chip||0}</b></div>`
+    +`<div class="st-row"><span>🔲 Chips verkauft</span><b>${game.chips}</b></div>`
+    +`<div class="st-row"><span>⚡ Strom (Erz./Bed.)</span><b>${Math.round(game.powerGen)} / ${Math.round(game.powerDemand)}</b></div>`
+    +`<div class="st-row"><span>🔋 Speicher</span><b>${Math.round(game.storedPower)} / ${Math.round(game.powerCap)}</b></div>`;
+  const mach=STAT_MACH.map(kk=>{ const n=buildings.filter(b=>b.kind===kk).length; if(!n) return "";
+    const r=RECIPES[kk]; const out=(kk==='electrolyseur')?'→ H₂/O₂':(kk==='chemfab')?'→ Vorräte':(r&&r.out?'→ '+ITEMS[r.out].name+' '+fmt(s.rate[r.out])+'/min':'');
+    return `<div class="st-row"><span>${DEF[kk].ic} ${DEF[kk].name} ×${n}</span><b>${out}</b></div>`; }).join("");
+  body.innerHTML=`<div class="st-sec">⚡ Stromerzeugung (Verlauf, neuste rechts)</div><canvas id="pwr-graph" width="700" height="120"></canvas>`
+    +`<div class="st-grid"><div><div class="st-sec">Produktion / Min</div>${prod}</div>`
+    +`<div><div class="st-sec">Wirtschaft & Strom</div>${eco}</div></div>`
+    +`<div class="st-sec">Anlagen & Output</div>${mach||'<div class="st-row"><span>Noch keine Maschinen</span><b></b></div>'}`;
+  drawPowerGraph();
+}
+function drawPowerGraph(){
+  const c=document.getElementById('pwr-graph'); if(!c) return; const ctx=c.getContext('2d'); const W=c.width,H=c.height;
+  ctx.clearRect(0,0,W,H); const g=game.stats.power, d=game.stats.dem;
+  const max=Math.max(10,...g,...d)*1.12, X=i=>i/119*W, Y=v=>H-4-(v/max)*(H-18);
+  ctx.strokeStyle='#1d2c44'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(0,Y(0)); ctx.lineTo(W,Y(0)); ctx.stroke();
+  const line=(arr,col)=>{ if(arr.length<1) return; ctx.strokeStyle=col; ctx.lineWidth=2; ctx.beginPath();
+    arr.forEach((v,i)=>{ const x=X(i),y=Y(v); i?ctx.lineTo(x,y):ctx.moveTo(x,y); }); ctx.stroke(); };
+  line(d,'#ff5d6c'); line(g,'#34e0c0');
+  ctx.fillStyle='#8095b0'; ctx.font='10px monospace'; ctx.fillText('max '+Math.round(max)+' kWh',4,12);
+  ctx.fillStyle='#34e0c0'; ctx.fillText('■ Erzeugung',W-168,12); ctx.fillStyle='#ff5d6c'; ctx.fillText('■ Bedarf',W-70,12);
+}
+
+/* ===================== HANDELSPLATZ (nur schwer) ===================== */
+const MARKET_BUY=5, MARKET_SELL=1, SELL_SAT=0.09, SAT_MAX=0.8, MKT_BATCH=10;
+function buyPrice(key){ return Math.ceil(SUP[key].price*MARKET_BUY); }                                   // teuer
+function sellPrice(key){ const sat=Math.min(SAT_MAX,game.market.sat[key]||0); return Math.max(1,Math.round(SUP[key].price*MARKET_SELL*(1-sat))); } // günstig, fallend
+function marketBuy(key){ const cost=buyPrice(key)*MKT_BATCH; if(game.money<cost){ toast("Zu wenig Geld.",0xff5d6c); return; }
+  game.money-=cost; SUP[key].stock+=MKT_BATCH; refreshMarket(); }
+function marketSell(key){ if(SUP[key].stock<MKT_BATCH){ toast("Nicht genug Vorrat.",0xffb454); return; }
+  const rev=sellPrice(key)*MKT_BATCH; game.money+=rev; SUP[key].stock-=MKT_BATCH;
+  game.market.sat[key]=Math.min(SAT_MAX,(game.market.sat[key]||0)+SELL_SAT); refreshMarket(); }
+function buildMarket(){ const body=document.getElementById('market-body'); body.innerHTML="";
+  for(const key in SUP){ const row=document.createElement('div'); row.className="mk-row"; row.dataset.k=key;
+    row.innerHTML=`<span class="nm">${SUP[key].name}</span><span class="stk">—</span>`
+      +`<button class="mk-btn mk-buy" data-act="buy">—</button><button class="mk-btn mk-sell" data-act="sell">—</button>`;
+    body.appendChild(row);
+  }
+  body.querySelectorAll('.mk-btn').forEach(btn=>{ const key=btn.closest('.mk-row').dataset.k;
+    btn.onclick=()=> btn.dataset.act==='buy'?marketBuy(key):marketSell(key); });
+  refreshMarket();
+}
+function refreshMarket(){ document.querySelectorAll('#market-body .mk-row').forEach(row=>{ const key=row.dataset.k;
+  row.querySelector('.stk').textContent=Math.floor(SUP[key].stock);
+  const buy=row.querySelector('.mk-buy'), sell=row.querySelector('.mk-sell');
+  buy.textContent="Kauf "+MKT_BATCH+"× · "+(buyPrice(key)*MKT_BATCH)+" 💵"; buy.disabled=game.money<buyPrice(key)*MKT_BATCH;
+  sell.textContent="Verkauf "+MKT_BATCH+"× · "+(sellPrice(key)*MKT_BATCH)+" 💵"; sell.disabled=SUP[key].stock<MKT_BATCH;
+}); }
+
 /* ===================== LOOP ===================== */
 const clock=new THREE.Clock();
 let started=false;
@@ -1210,6 +1311,20 @@ function simTick(dt){
   tickWork(dt);
   moveItems(dt);
   autoBuy(dt);
+  statTick(dt);
+}
+// Statistik-Sampling + Markt-Sättigung-Abklingen (nur „schwer")
+function statTick(dt){
+  if(game.difficulty!=='hard') return;
+  game.simTime+=dt;
+  for(const kk in game.market.sat){ game.market.sat[kk]*=Math.pow(0.97,dt); if(game.market.sat[kk]<0.01) delete game.market.sat[kk]; } // Preise erholen sich langsam
+  game.stats.acc+=dt; if(game.stats.acc<1) return; const span=game.stats.acc; game.stats.acc=0;
+  const s=game.stats;
+  s.power.push(Math.round(game.powerGen)); if(s.power.length>120) s.power.shift();
+  s.dem.push(Math.round(game.powerDemand)); if(s.dem.length>120) s.dem.shift();
+  const rate={}; const keys=new Set([...Object.keys(game.made),...Object.keys(s.snap)]);
+  for(const key of keys) rate[key]=Math.max(0,((game.made[key]||0)-(s.snap[key]||0))/span*60); // pro Sim-Minute
+  s.rate=rate; s.snap=Object.assign({},game.made);
 }
 function loop(){
   requestAnimationFrame(loop);
@@ -1223,6 +1338,8 @@ function loop(){
     updateLabels();
     updateGoals(); renderGoals();
     if(!document.getElementById('techtree').classList.contains('hide')) refreshTechButtons();
+    if(!document.getElementById('stats').classList.contains('hide')) renderStats();
+    if(!document.getElementById('market').classList.contains('hide')) refreshMarket();
   }
   // Belt-Pfeile pulsieren
   const pulse=.6+.4*Math.sin(performance.now()*.006);
@@ -1309,7 +1426,7 @@ function loadGame(d){
   placeDir=1;
   for(const si of (d.items||[])){ const t=grid_.get(k(si.x,si.z)); if(t&&(t.kind==="belt"||t.kind==="pipe")) makeItem(si.type,si.x,si.z,si.prog); }
   game.money=(d.money!=null?d.money:game.money); game.chips=d.chips||0; game.timeOfDay=d.timeOfDay||0.33; game.speed=1; game.soldWindow=[]; game.difficulty=d.difficulty||'easy';
-  game.made=d.made||{}; game.goalsDone=d.goalsDone||{}; game.tech=Object.assign({solar:1,battery:1,gastank:1,belt:1,pipe:1,chip:1}, d.tech||{}); buildGoals();
+  game.made=d.made||{}; game.goalsDone=d.goalsDone||{}; game.tech=Object.assign({solar:1,battery:1,gastank:1,belt:1,pipe:1,chip:1}, d.tech||{}); resetStatsMarket(); buildGoals();
   for(const kk in SUP){ if(d.sup && d.sup[kk]!=null) SUP[kk].stock=d.sup[kk]; }
   const ab=document.getElementById('autobuy'); if(ab && d.autobuy!=null) ab.checked=d.autobuy;
   document.querySelectorAll('#speedctl .spd').forEach(e=>e.classList.toggle('sel', e.dataset.s==='1'));
@@ -1323,8 +1440,8 @@ function loadGame(d){
 buildHotbar(); buildSupplies(); buildGoals(); selectTool("belt");
 document.querySelectorAll('#speedctl .spd').forEach(el=>{ el.onclick=()=>{ game.speed=+el.dataset.s;
   document.querySelectorAll('#speedctl .spd').forEach(e=>e.classList.toggle('sel', e===el)); }; });
-/* ===================== HINTERGRUNDMUSIK (track1–5) ===================== */
-const TRACKS=["track1.mp3","track2.mp3","track3.mp3","track4.mp3","track5.mp3"];
+/* ===================== HINTERGRUNDMUSIK (track1–8) ===================== */
+const TRACKS=["track1.mp3","track2.mp3","track3.mp3","track4.mp3","track5.mp3","track6.mp3","track7.mp3","track8.mp3"];
 const musicEl=new Audio(); musicEl.volume=.45; let trackIdx=Math.floor(Math.random()*TRACKS.length);
 let musicOn = localStorage.getItem('chiptorio-music')!=='off';
 function playTrack(){ musicEl.src=TRACKS[trackIdx]; const p=musicEl.play(); if(p&&p.catch) p.catch(()=>{}); }
@@ -1345,14 +1462,15 @@ function applyDifficulty(diff){
   setFieldSize(diff==='hard'?46:23);
   if(diff==='hard'){ camera.position.set(0,34,32); controls.target.set(0,0,0); }
   buildHotbar(); buildSupplies(); buildGoals(); selectTool(toolList().includes(tool)?tool:"belt"); setModeTitle();
-  document.getElementById('tech-btn').classList.toggle('hide', diff!=='hard');
-  document.getElementById('techtree').classList.add('hide');
+  const hardOnly=diff!=='hard';
+  for(const id of ['tech-btn','stats-btn','market-btn']) document.getElementById(id).classList.toggle('hide', hardOnly);
+  for(const id of ['techtree','stats','market']) document.getElementById(id).classList.add('hide');
 }
 function resetSupplies(diff){ for(const kk in SUP){ SUP[kk].stock = (diff==='hard' && kk!=='hcl') ? 0 : 80; } }
 function startFactory(diff){
   applyDifficulty(diff);
   game.money = diff==='hard'?HARD_MONEY:5500; game.chips=0; game.soldWindow=[]; resetSupplies(diff);
-  game.made={}; game.goalsDone={}; game.tech={solar:1,battery:1,gastank:1,belt:1,pipe:1,chip:1};
+  game.made={}; game.goalsDone={}; game.tech={solar:1,battery:1,gastank:1,belt:1,pipe:1,chip:1}; resetStatsMarket();
   if(diff==='hard'){ clearFactory(); scatterResources(); } // schweres Feld neu erzeugen; „einfach" nutzt die beim Laden erzeugte Karte
   document.getElementById('intro').classList.add('hide'); started=true; if(musicOn) playTrack();
   toast(diff==='hard'
@@ -1363,6 +1481,10 @@ document.getElementById('start-easy').onclick=()=>startFactory('easy');
 document.getElementById('start-hard').onclick=()=>startFactory('hard');
 document.getElementById('tech-btn').onclick=()=>{ renderTech(); document.getElementById('techtree').classList.remove('hide'); };
 document.getElementById('tt-close').onclick=()=>document.getElementById('techtree').classList.add('hide');
+document.getElementById('stats-btn').onclick=()=>{ renderStats(); document.getElementById('stats').classList.remove('hide'); };
+document.getElementById('stats-close').onclick=()=>document.getElementById('stats').classList.add('hide');
+document.getElementById('market-btn').onclick=()=>{ buildMarket(); document.getElementById('market').classList.remove('hide'); };
+document.getElementById('market-close').onclick=()=>document.getElementById('market').classList.add('hide');
 
 /* Laden (aus dem Hauptmenü) oder frische Karte erzeugen */
 const _loadData=sessionStorage.getItem('chiptorio-loaddata');
