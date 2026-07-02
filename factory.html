@@ -323,6 +323,7 @@ const DEF = {
   qubitfab:  {name:"Qubit-Fab", ic:"🔮", cost:1400, col:0x3a2a5a, powerUse:40, size:[2,2], cat:"Maschine"},
   cryoworks: {name:"Kryostat-Werk", ic:"❄️", cost:1100, col:0xe8eef4, powerUse:35, cat:"Maschine"},
   qfab:      {name:"Quantenchip-Fabrik", ic:"⚛️", cost:3000, col:0x1e2a45, powerUse:120, size:[3,3], cat:"Maschine"},
+  drone:     {name:"Drohnen-Station", ic:"🛸", cost:600, col:0x4a6a8a, powerUse:10, cat:"Maschine"}, // nur „schwer“: repariert Verschleiß im Radius
 };
 
 // Quellen (kein Input). Pumpe fördert Wasser in ROHRE.
@@ -386,6 +387,8 @@ const RESEARCH={
     desc:'Schaltet 🌀 Portale frei: 2 Portale bilden ein Paar — Waren (Feststoffe UND Fluide) springen von A nach B. Beide brauchen Strom.'},
   fusion: {name:'Fusionsreaktor',   ic:'🔆', cost:7000,
     desc:'Schaltet den 🔆 Fusionsreaktor frei: 800 ⚡ rund um die Uhr (4× AKW), 3×3 Felder, Baukosten 5000 💵.'},
+  drill:  {name:'Tiefbohrtechnik',  ic:'⚒️', cost:6000, hardOnly:true,
+    desc:'Schaltet die ⚒️ Tiefbohranlage frei (2500 💵 je Einsatz): auf ein ERSCHÖPFTES (oder angeschlagenes) Vorkommen setzen — es regeneriert langsam bis zu 100 % des ursprünglichen Rohstoffs (braucht Strom).'},
   quantum:{name:'Quantenchips',     ic:'⚛️', cost:15000,
     desc:'Schaltet die ⚛️ Quanten-Produktionskette frei: Supraleiter-Werk, Qubit-Fab, Kryostat-Werk & Quantenchip-Fabrik. Ein Quantenchip verbraucht 2 normale Chips (Steuer-Elektronik) und verkauft sich für '+QCHIP_PRICE+' 💵.'},
 };
@@ -395,9 +398,10 @@ const TOOL_GROUPS=()=>[
   {id:'energy',    name:'Energie',   ic:'⚡', tools:['cable','solar','wind','battery','nuclear',...(game.research.fusion?['fusion']:[])]},
   {id:'mach',      name:'Maschinen', ic:'🏭', tools:['electrolyseur','furnace','siemens','crystal','waferplant','fab','packaging',...(isAdv()?['chemfab']:[])]},
   {id:'stock',     name:'Lager',     ic:'📦', tools:['gastank','depot','seller']},
+  ...(isHard()?[{id:'spezial', name:'Spezial', ic:'🛠️', tools:['drone',...(game.research.drill?['deepdrill']:[])]}]:[]),
   ...(game.research.quantum?[{id:'quant', name:'Quanten', ic:'⚛️', tools:['scondworks','qubitfab','cryoworks','qfab']}]:[]),
 ];
-const TOOLMETA = { delete:{name:"Abriss",ic:"❌",cost:0}, upgrade:{name:"Upgrade",ic:"⬆️",cost:0} }; // Werkzeuge ohne Gebäude
+const TOOLMETA = { delete:{name:"Abriss",ic:"❌",cost:0}, upgrade:{name:"Upgrade",ic:"⬆️",cost:0}, deepdrill:{name:"Tiefbohranlage",ic:"⚒️",cost:2500} }; // Werkzeuge ohne eigenes Gitter-Gebäude
 function toolList(){ // flache Liste (Gültigkeits-Checks)
   const t=TOOL_GROUPS().flatMap(g=>g.tools); t.push('delete'); if(isAdv()) t.push('upgrade'); return t;
 }
@@ -419,6 +423,12 @@ const capOf     =b=> (DEF[b.kind].powerCap||0)*batMult();      // effektive Akku
 const gasCap    =()=> isAdv() ? GAS_CAP_HARD[(game.tech.gastank||1)-1] : GAS_CAP;
 const depotCap  =()=> isAdv() ? DEPOT_CAP_HARD[(game.tech.depot||1)-1] : DEPOT_CAP;
 const depotTotal=b=> Object.values(b.buf).reduce((s,v)=>s+v,0);
+// ---- Verschleiß & Wartung (nur „schwer“) ----
+const WEAR_TIME=480;                 // Sekunden aktiver Arbeit bis Volleschleiß (dann 50 % Tempo)
+const wearEff=b=> 1-0.5*(b.wear||0); // Effizienz 100 % → 50 %
+const addWear=(b,dt)=>{ if(isHard()) b.wear=Math.min(1,(b.wear||0)+dt/WEAR_TIME); };
+const DRONE_RADIUS=12, DRONE_SPEED=5, DRONE_WORK=2.5, DRONES_PER=2; // Drohnen-Station
+const DRILL_TIME=180;                // Sekunden, bis die Tiefbohranlage ein Vorkommen von 0 auf 100 % regeneriert
 const TECH_COST={ solar:[800,2000], wind:[700,1800], battery:[700,1800], gastank:[600,1500], depot:[600,1500], belt:[1200,3000], pipe:[1000,2500], chip:[3000,8000] }; // Kosten Stufe1→2, Stufe2→3
 const TECH_INFO={
   solar:  {name:'Solarzellen',        ic:'☀️', eff:l=>['Basis-Ertrag','+10 % Ertrag','+25 % Ertrag'][l-1]},
@@ -693,6 +703,18 @@ function makeMesh(kind,dir){
       add(B(.14,.1,.14,0xa8895a),.3,.07,.32); add(B(.11,.09,.11,0x8f7346),.14,.07,.38); // Kisten
       add(B(.1,.08,.1,0xba9a6a),.3,.19,.32);
       indY=.95; break; }
+    case "drone": { // Drohnen-Station: Landeplattform mit Kontrollturm + Reichweiten-Ring
+      add(B(.84,.1,.84,0x2e4258,{roughness:.6}),0,.05,0);                     // Plattform
+      add(C(.3,.3,.03,0x4a6a8a,{metalness:.4}),0,.12,.12);                    // Landekreis
+      add(C(.24,.24,.015,0x9ad0e8,{emissive:0x3388aa,emissiveIntensity:.5}),0,.14,.12); // „H"-Fläche
+      add(B(.2,.5,.2,0x3a5a7a,{roughness:.5}),-.26,.3,-.26);                  // Kontrollturm
+      add(B(.24,.06,.24,0x5a86a8),-.26,.58,-.26);
+      add(C(.02,.02,.3,0xb8c8d8,{metalness:.7}),-.26,.75,-.26);               // Antenne
+      add(SP(.035,0x66ffe0,{emissive:0x22ccaa,emissiveIntensity:1}),-.26,.92,-.26);
+      { const rg=new THREE.Mesh(new THREE.RingGeometry(DRONE_RADIUS-.15,DRONE_RADIUS,64),
+          new THREE.MeshBasicMaterial({color:0x66d0ff,transparent:true,opacity:.14,side:THREE.DoubleSide}));
+        rg.rotation.x=-Math.PI/2; rg.position.y=.04; g.add(rg); }             // Reichweiten-Ring
+      indY=1.05; break; }
     case "portal": { // Portal: leuchtender Ring mit kreisenden Orbs (Loop dreht userData.rotor)
       add(B(.8,.12,.8,0x241a3a,{roughness:.7}),0,.06,0);
       add(B(.08,.6,.08,0x3a2a5a,{metalness:.4}),-.42,.3,0); add(B(.08,.6,.08,0x3a2a5a,{metalness:.4}),.42,.3,0); // Pylonen
@@ -1049,6 +1071,74 @@ function moveItems(dt){
   if(items.some(i=>i._dead)) items = items.filter(i=>!i._dead);
 }
 
+/* ===================== WARTUNGSDROHNEN & TIEFBOHRANLAGE (nur „schwer“) ===================== */
+const centerOfB=b=>{ const cs=b.cells; const ax=cs.reduce((s,c)=>s+c[0],0)/cs.length, az=cs.reduce((s,c)=>s+c[1],0)/cs.length; return tileToWorld(ax,az); };
+const isMachineKind=b=> !!RECIPES[b.kind] || b.kind==="chemfab"; // verschleißende Gebäude (inkl. Elektrolyseur via RECIPES)
+function makeDroneMesh(){
+  const g=new THREE.Group();
+  const bd=new THREE.Mesh(new THREE.BoxGeometry(.14,.05,.14),mat(0x9ab0c4,{metalness:.6,roughness:.4})); g.add(bd);
+  [[-.09,-.09],[.09,-.09],[-.09,.09],[.09,.09]].forEach(p=>{
+    const r=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,.012,10),mat(0x334455,{metalness:.5})); r.position.set(p[0],.035,p[1]); g.add(r); });
+  const li=new THREE.Mesh(new THREE.SphereGeometry(.025,8,8),mat(0x66ffe0,{emissive:0x22ccaa,emissiveIntensity:1})); li.position.y=-.03; g.add(li);
+  scene.add(g); return g;
+}
+function initDrones(b){
+  b.droneList=[]; const [sx,sz]=centerOfB(b);
+  for(let i=0;i<DRONES_PER;i++){ b.droneList.push({state:'idle',wx:sx+(i?-0.3:0.3),wz:sz,wob:i*2,workT:0,target:null,mesh:makeDroneMesh()}); }
+}
+function findWorn(st){
+  const [sx,sz]=centerOfB(st); let best=null,bd=1e9;
+  for(const m of buildings){ if(!isMachineKind(m) || (m.wear||0)<=0.5 || m._drone) continue;
+    const [mx,mz]=centerOfB(m); const d=Math.hypot(mx-sx,mz-sz);
+    if(d<=DRONE_RADIUS && d<bd){ bd=d; best=m; } }
+  return best;
+}
+function moveDrone(d,tx,tz,dt){
+  const dx=tx-d.wx, dz=tz-d.wz, dist=Math.hypot(dx,dz), step=DRONE_SPEED*dt;
+  if(dist<=step){ d.wx=tx; d.wz=tz; return true; }
+  d.wx+=dx/dist*step; d.wz+=dz/dist*step; return false;
+}
+function droneTick(b,dt){
+  if(!b.droneList) initDrones(b);
+  const [sx,sz]=centerOfB(b);
+  for(const d of b.droneList){
+    d.wob+=dt;
+    if(d.state==='idle'){
+      if(b.powered){ const t=findWorn(b); if(t){ d.target=t; t._drone=d; d.state='out'; } }
+    } else if(d.state==='out'){
+      if(!d.target || grid_.get(k(d.target.x,d.target.z))!==d.target){ if(d.target) d.target._drone=null; d.target=null; d.state='back'; }
+      else { const [tx,tz]=centerOfB(d.target); if(moveDrone(d,tx,tz,dt)){ d.state='work'; d.workT=0; } }
+    } else if(d.state==='work'){
+      d.workT+=dt;
+      if(!d.target || grid_.get(k(d.target.x,d.target.z))!==d.target){ if(d.target) d.target._drone=null; d.target=null; d.state='back'; }
+      else if(d.workT>=DRONE_WORK){ d.target.wear=0; d.target._drone=null; d.target=null; d.state='back'; }
+    } else { // back
+      if(moveDrone(d,sx,sz,dt)) d.state='idle';
+    }
+    const busy=d.state==='work';
+    d.mesh.position.set(d.wx, (busy?0.9:1.3)+0.08*Math.sin(d.wob*4), d.wz);
+  }
+}
+function attachDrill(b){ // Bohrturm aufs (2×2-)Vorkommen setzen
+  const g=b.mesh, add=(m,x,y,z,rz)=>{ m.position.set(x,y,z); if(rz)m.rotation.z=rz; g.add(m); };
+  const M=(geo,c,o)=>new THREE.Mesh(geo,mat(c,o));
+  [[-.5,-.5],[.5,-.5],[-.5,.5],[.5,.5]].forEach(p=>{ // 4 schräge Beine
+    const leg=M(new THREE.CylinderGeometry(.035,.035,1.6,8),0xc9a227,{metalness:.6});
+    leg.position.set(p[0]*.55,.8,p[1]*.55); leg.rotation.x=-p[1]*.32; leg.rotation.z=p[0]*.32; g.add(leg); });
+  add(M(new THREE.BoxGeometry(.4,.08,.4),0x8a6a1a,{metalness:.5}),0,1.55,0);          // Plattform
+  add(M(new THREE.CylinderGeometry(.05,.07,1.5,8),0x6a7a8a,{metalness:.8}),0,.8,0);   // Bohrgestänge
+  add(M(new THREE.SphereGeometry(.06,8,8),0xffb454,{emissive:0xcc7a00,emissiveIntensity:1}),0,1.68,0); // Warnlicht
+}
+function drillAt(x,z){
+  const b=grid_.get(k(x,z)); if(!b) return;
+  if(!(SOURCES[b.kind] && b.left!=null && isFinite(b.left))){ toast("Die ⚒️ Tiefbohranlage gehört auf ein ENDLICHES Vorkommen (Mine oder Chemie-Vorkommen).",0xffb454); return; }
+  if(b.drilled){ toast("Hier arbeitet bereits eine Tiefbohranlage.",0xffb454); return; }
+  const cost=TOOLMETA.deepdrill.cost;
+  if(game.money<cost){ toast("Zu wenig Geld für die Tiefbohranlage ("+cost+" 💵).",0xff5d6c); return; }
+  game.money-=cost; b.drilled=true; attachDrill(b);
+  toast("⚒️ Tiefbohranlage errichtet — das Vorkommen regeneriert bis zu 100 %.",0x34e0c0);
+}
+
 /* ===================== WIRTSCHAFT / TICK ===================== */
 function hasInputs(b){ const r=RECIPES[b.kind]; for(const key in r.in){ if((b.buf[key]||0) < r.in[key]) return false; } return true; }
 function hasSupplies(b){ const r=RECIPES[b.kind]; for(const key in r.sup){ if(SUP[key].stock < r.sup[key]) return false; } return true; }
@@ -1104,6 +1194,8 @@ function tickWork(dt){
     if(SOURCES[b.kind]){
       const s=SOURCES[b.kind];
       const powered = !DEF[b.kind].powerUse || b.powered;
+      if(b.drilled && b.left!=null && isFinite(b.left) && powered){ // ⚒️ Tiefbohranlage: regeneriert bis 100 %
+        const mx=DEPOSIT_AMOUNT(b.kind); if(b.left<mx) b.left=Math.min(mx, b.left+dt*mx/DRILL_TIME); }
       const depleted = b.left!=null && b.left<=0; // Modus „schwer“: Vorkommen ist endlich
       if(b.outBuf>0){ if(spawnOut(b,s.out)) b.outBuf=0; }
       else if(powered && !depleted){ b.t+=dt; if(b.t>=s.time){ b.t=0;
@@ -1114,18 +1206,20 @@ function tickWork(dt){
       depotEmit(b);
     } else if(b.kind==="portal"){
       portalEmit(b);
+    } else if(b.kind==="drone"){
+      droneTick(b,dt);
     } else if(b.kind==="chemfab"){ // wandelt eingehende Roh-Chemikalien in Vorräte um („mittel“/„schwer“)
-      if(b.powered && b.want){ b.t+=dt; if(b.t>=CHEM_TIME/machineMult(b.speedLvl)){ b.t=0;
+      if(b.powered && b.want){ addWear(b,dt); b.t+=dt; if(b.t>=CHEM_TIME/(machineMult(b.speedLvl)*wearEff(b))){ b.t=0;
         for(const kk of chemKeys()){ if((b.buf[kk]||0)>0){ b.buf[kk]--; SUP[kk].stock+=CHEM_YIELD; } } } }
     } else if(b.kind==="electrolyseur"){
       electroEmit(b);
       const r=RECIPES.electrolyseur;
       if((b.h2Buf||0)<=0 && (b.o2Buf||0)<=0 && b.powered && (b.buf.water||0)>=r.in.water){
-        b.t+=dt; if(b.t>=r.time/machineMult(b.speedLvl)){ b.t=0; b.buf.water-=r.in.water; b.h2Buf=2; b.o2Buf=1; } }
+        addWear(b,dt); b.t+=dt; if(b.t>=r.time/(machineMult(b.speedLvl)*wearEff(b))){ b.t=0; b.buf.water-=r.in.water; b.h2Buf=2; b.o2Buf=1; } }
     } else if(RECIPES[b.kind]){
       const r=RECIPES[b.kind];
       if(b.outBuf>0){ if(spawnOut(b,b.outType)) b.outBuf--; continue; }
-      if(b.want && b.powered){ b.t+=dt; if(b.t>=r.time/machineMult(b.speedLvl)){ b.t=0;
+      if(b.want && b.powered){ addWear(b,dt); b.t+=dt; if(b.t>=r.time/(machineMult(b.speedLvl)*wearEff(b))){ b.t=0;
         for(const key in r.in) b.buf[key]-=r.in[key];
         for(const key in r.sup) SUP[key].stock-=r.sup[key];
         b.outType=r.out; b.outBuf=r.outCount||1;
@@ -1149,6 +1243,9 @@ function autoBuy(dt){
 function statusOf(b){
   const d=DEF[b.kind];
   if(d.powerUse && !b.powered) return b.wired?["kein Strom",0xff5d6c]:["nicht verbunden",0xff5d6c];
+  if(isHard() && (RECIPES[b.kind]||b.kind==="chemfab") && (b.wear||0)>0.7) return ["⚠️ Wartung nötig — läuft mit "+Math.round(wearEff(b)*100)+" % Tempo"+(b._drone?" · 🛸 Drohne unterwegs":""),0xffd24a];
+  if(b.kind==="drone"){ const n=(b.droneList||[]).length, busy=(b.droneList||[]).filter(x=>x.state!=='idle').length;
+    return busy?["🛸 "+busy+"/"+n+" Drohnen im Einsatz",0x44ff88]:["🛸 "+n+" Drohnen bereit (Radius "+DRONE_RADIUS+")",0x44ff88]; }
   if(b.kind==="electrolyseur"){ if((b.h2Buf||0)>0||(b.o2Buf||0)>0) return ["gibt H₂/O₂ ab",0x44ff88]; if((b.buf.water||0)>=2) return ["läuft",0x44ff88]; return ["wartet auf Wasser",0xff5d6c]; }
   if(b.kind==="gastank"){ const c=gasCap(), h=Math.round(b.buf.h2||0), o=Math.round(b.buf.o2||0), w=Math.round(b.buf.water||0);
     const full=Math.max(h,o,w)>=c*0.999; return ["🛢️ H₂ "+h+"/"+c+" · O₂ "+o+"/"+c+(w?(" · 💧"+w):"")+(full?" · VOLL":""), full?0xffd24a:0x44ff88]; }
@@ -1160,6 +1257,8 @@ function statusOf(b){
     const t=Object.values(b.buf).reduce((s,v)=>s+v,0); return ["⇄ verbunden"+(t?(" · "+Math.round(t)+" in Transit"):""),0x44ff88]; }
   if(b.kind==="fusion") return b.wired?["🔆 "+DEF.fusion.powerGen+" (24/7)",0x44ff88]:["nicht verbunden",0xffd24a];
   if(SOURCES[b.kind]){
+    if(b.drilled && b.left!=null && isFinite(b.left) && b.left<DEPOSIT_AMOUNT(b.kind)*0.999)
+      return ["⚒️ bohrt nach · "+Math.max(0,Math.ceil(b.left))+"/"+DEPOSIT_AMOUNT(b.kind),0x5aa9ff];
     if(b.left!=null && b.left<=0) return ["ERSCHÖPFT",0x8a8a8a];
     if(b.outBuf>0) return ["Ausgang voll",0xffd24a];
     return [b.left!=null&&isFinite(b.left)?("läuft · noch "+Math.max(0,Math.ceil(b.left))+" Einheiten"):"läuft",0x44ff88]; }
@@ -1219,6 +1318,7 @@ function removeAt(x,z){
   if(b.fixed){ toast("Natürliche Rohstoffquelle – kann nicht abgerissen werden.",0xffb454); return; }
   game.money += Math.round(DEF[b.kind].cost*0.5);
   if(b.kind==="portal" && b.partner){ b.partner.partner=null; } // Partner-Portal wird wieder frei
+  if(b.droneList){ for(const dr of b.droneList){ scene.remove(dr.mesh); if(dr.target) dr.target._drone=null; } }
   scene.remove(b.mesh); if(b.labelEl) b.labelEl.remove();
   for(const [cx,cz] of (b.cells||[[b.x,b.z]])) grid_.delete(k(cx,cz));
   buildings.splice(buildings.indexOf(b),1);
@@ -1241,6 +1341,7 @@ function pickTile(e){
 function applyTool(t){ if(!t) return;
   if(tool==="delete") return removeAt(t.x,t.z);
   if(tool==="upgrade") return upgradeAt(t.x,t.z);
+  if(tool==="deepdrill") return drillAt(t.x,t.z);
   place(tool,t.x,t.z);
 }
 // Einzelne Maschine per ⬆️-Werkzeug auf mehr Speed upgraden (nur „schwer“; bis Stufe 3)
@@ -1321,6 +1422,7 @@ function ensureGhost(){
   if(ghost){ scene.remove(ghost); ghost=null; }
   if(tool==="delete"){ ghost=new THREE.Mesh(new THREE.BoxGeometry(.95,.1,.95), mat(0xff5d6c,{transparent:true,opacity:.4})); ghost.position.y=.06; }
   else if(tool==="upgrade"){ ghost=new THREE.Mesh(new THREE.BoxGeometry(.95,.1,.95), mat(0xb58fd6,{transparent:true,opacity:.4})); ghost.position.y=.06; }
+  else if(tool==="deepdrill"){ ghost=new THREE.Mesh(new THREE.BoxGeometry(.95,.1,.95), mat(0xffb454,{transparent:true,opacity:.4})); ghost.position.y=.06; }
   else { ghost=makeMesh(tool,placeDir); ghost.traverse(o=>{ if(o.material){ o.material=o.material.clone(); o.material.transparent=true; o.material.opacity=.45; } }); }
   scene.add(ghost);
 }
@@ -1333,11 +1435,11 @@ function updateGhost(){
   if(tool==="belt"||tool==="pipe"){
     if(ghost.userData.gdir!==placeDir){ (tool==="belt"?buildBeltVisual:buildPipeVisual)(ghost, placeDir, null); dimGhost(ghost); ghost.userData.gdir=placeDir; }
   } else if(tool==="chemfab"){ ghost.rotation.y=(placeDir===0||placeDir===2)?Math.PI/2:0; }
-  else if(tool!=="delete" && tool!=="upgrade" && tool!=="cross" && tool!=="pipecross"){ ghost.rotation.y=ROT[placeDir]; } // Kreuzungen sind achsenparallel
-  const sz=(tool!=="delete"&&tool!=="upgrade"&&DEF[tool])?footprint(tool,placeDir):[1,1];
+  else if(tool!=="delete" && tool!=="upgrade" && tool!=="deepdrill" && tool!=="cross" && tool!=="pipecross"){ ghost.rotation.y=ROT[placeDir]; } // Kreuzungen sind achsenparallel
+  const sz=(tool!=="delete"&&tool!=="upgrade"&&tool!=="deepdrill"&&DEF[tool])?footprint(tool,placeDir):[1,1];
   const x=hoverTile.x,z=hoverTile.z;
   const cwx=(x+(sz[0]-1)/2 - HALF)*S, cwz=(z+(sz[1]-1)/2 - HALF)*S;
-  ghost.position.set(cwx, (tool==="delete"||tool==="upgrade")?.06:0, cwz);
+  ghost.position.set(cwx, (tool==="delete"||tool==="upgrade"||tool==="deepdrill")?.06:0, cwz);
 }
 
 /* Tooltip über Gebäuden */
@@ -1354,6 +1456,7 @@ function updateTip(e){
     if(isAdv() && (RECIPES[b.kind]||b.kind==='electrolyseur'||b.kind==='chemfab')){
       const lvl=b.speedLvl||1;
       extra+="\nSpeed: Stufe "+lvl+"/3 (×"+MACHINE_MULT[lvl-1].toFixed(2)+")";
+      if(isHard()) extra+="\nZustand: "+Math.round((1-(b.wear||0))*100)+" % (Tempo ×"+wearEff(b).toFixed(2)+")";
       if(tool==='upgrade') extra+= lvl>=3 ? "\n⬆️ max. Stufe erreicht" : "\n⬆️ Upgrade → Stufe "+(lvl+1)+": "+Math.round(DEF[b.kind].cost*(lvl===1?0.75:1.5))+" 💵";
     }
     tipEl.style.display="block"; tipEl.style.left=(e.clientX+14)+"px"; tipEl.style.top=(e.clientY+14)+"px";
@@ -1393,6 +1496,8 @@ const WHY = {
   qubitfab:"Quanten-Kette Schritt 2: Belichtet Josephson-Kontakte auf einen Roh-Wafer und macht daraus einen Qubit-Wafer. Braucht Wafer + Supraleiter.",
   cryoworks:"Quanten-Kette Schritt 3: Baut Kryostate (Kühlgeräte nahe dem absoluten Nullpunkt) — Qubits rechnen nur eiskalt. Braucht Supraleiter + viel Stickstoff.",
   qfab:"Endmontage: Qubit-Wafer + Kryostat + 2 NORMALE CHIPS (Steuer-Elektronik!) → 1 Quantenchip (1500 💵). Deine Halbleiter-Produktion ist also Teil der Quanten-Kette — verkaufe nicht alles!",
+  drone:"Nur im schweren Modus: Maschinen VERSCHLEISSEN bei Arbeit (bis 50 % Tempo). Die Station schickt 2 Wartungsdrohnen los, die abgenutzte Maschinen im Radius von 12 Feldern automatisch reparieren. Platziere sie mitten in deiner Fabrik!",
+  deepdrill:"Werkzeug (Forschung nötig): Klicke ein endliches Vorkommen an — die Tiefbohranlage erschließt tiefere Schichten und regeneriert den Rohstoff langsam bis zu 100 % des ursprünglichen Vorrats. Braucht Strom am Vorkommen. Kosten je Einsatz.",
   delete:"Reißt Gebäude ab (50 % der Kosten zurück).",
   upgrade:"Ab Modus „mittel“: Werkzeug wählen und eine Maschine anklicken, um sie einzeln auf mehr Geschwindigkeit zu upgraden (bis Stufe 3). Kosten richten sich nach der Maschine.",
 };
@@ -1408,6 +1513,7 @@ function infoHTML(kind){
   else if(SOURCES[kind]) prod.push(ITEMS[SOURCES[kind].out].name);
   if(d.powerGen) prod.push(d.powerGen+" ⚡"+(kind==="solar"?" (tagsüber)":kind==="wind"?" (24/7, konstant)":(kind==="nuclear"||kind==="fusion")?" (24/7)":""));
   if(kind==="portal") prod.push("teleportiert Waren zum Partner-Portal (immer paarweise bauen!)");
+  if(kind==="drone") prod.push("2 Wartungsdrohnen · reparieren Verschleiß im Radius "+DRONE_RADIUS);
   if(d.powerCap) prod.push("speichert "+d.powerCap+" ⚡");
   if(kind==="seller"){ prod.push("+"+chipPrice()+" 💵 pro Chip"); if(game.research.quantum) prod.push("+"+QCHIP_PRICE+" 💵 pro ⚛️ Quantenchip"); }
   if(kind==="chemfab"){ cons.push("Roh-Chemikalien (Vorkommen)"); prod.push("füllt Vorräte auf (N₂ · Fluor · Photoresist · Bor · Phosphor · Arsen · Kupfer · Epoxidharz · Argon)"); }
@@ -1425,7 +1531,7 @@ function toolTile(kk){ // Bauteil-Kachel (in Flyout und Hotbar identisch)
   const d=DEF[kk]||TOOLMETA[kk]||{name:kk,ic:"?",cost:0};
   const el=document.createElement('div'); el.className="tool"+(kk==="delete"?" del":""); el.dataset.k=kk;
   el.innerHTML=`<div class="ic">${d.ic}</div><div class="nm">${d.name}</div>`+
-    ((kk!=="delete"&&kk!=="upgrade")?`<div class="cst">${d.cost} 💵</div>`:`<div class="cst">&nbsp;</div>`);
+    ((kk!=="delete"&&kk!=="upgrade")?`<div class="cst">${d.cost} 💵${kk==="deepdrill"?"/Einsatz":""}</div>`:`<div class="cst">&nbsp;</div>`);
   el.onclick=()=>selectTool(kk);
   el.onmouseenter=()=>showInfo(kk);           // Hover: Infos anzeigen
   el.onmouseleave=()=>showInfo(tool);         // zurück zum gewählten Werkzeug
@@ -1510,6 +1616,8 @@ function labelHTML(b){
   if(b.kind==="solar") out+=`<br><span class="p">+${d.powerGen} ⚡ Strom (tagsüber)</span>`;
   else if(b.kind==="wind") out+=`<br><span class="p">+${Math.round(d.powerGen*windMult())} ⚡ Strom (24/7, konstant)</span>${windMult()>1?`<br><span class="u">Windräder Lv ${game.tech.wind}</span>`:""}`;
   else if(b.kind==="nuclear"||b.kind==="fusion") out+=`<br><span class="p">+${d.powerGen} ⚡ Strom (24/7)</span>`;
+  else if(b.kind==="drone"){ const busy=(b.droneList||[]).filter(x=>x.state!=='idle').length;
+    out+=`<br><span class="p">🛸 repariert Maschinen (Radius ${DRONE_RADIUS})</span><br><span class="u">${busy} im Einsatz · -${d.powerUse} ⚡</span>`; }
   else if(b.kind==="portal") out+=b.partner?`<br><span class="p">⇄ mit Partner-Portal verbunden</span><br><span class="u">-${d.powerUse} ⚡ je Portal</span>`:`<br><span class="w">kein zweites Portal!</span>`;
   else if(b.kind==="electrolyseur") out+=`<br><span class="p">→ H₂ (vorne) · O₂ (hinten)</span><br><span class="u">braucht Wasser · -${d.powerUse} ⚡</span>`;
   else if(b.kind==="gastank") out+=`<br><span class="p">Gas-Puffer</span><br><span class="u">H₂ ${Math.round(b.buf.h2||0)} · O₂ ${Math.round(b.buf.o2||0)} / ${gasCap()}</span>`;
@@ -1525,6 +1633,7 @@ function labelHTML(b){
   else if(b.kind==="seller") out+=`<br><span class="p">Chip → +${chipPrice()} 💵</span>`;
   else if(b.kind==="battery"){ const c=capOf(b), p=Math.round(b.stored/c*100); out+=`<br><span class="p">🔋 geladen ${p}%</span><br><span class="u">Kapazität ${Math.round(c)} ⚡${batMult()>1?" (Lv "+(game.tech.battery)+")":""}</span>`; }
   if(isAdv() && (RECIPES[b.kind]||b.kind==='electrolyseur'||b.kind==='chemfab') && (b.speedLvl||1)>1) out+=`<br><span class="p">⬆️ Speed Stufe ${b.speedLvl}/3</span>`;
+  if(isHard() && (RECIPES[b.kind]||b.kind==='chemfab') && (b.wear||0)>0.3) out+=`<br><span class="${(b.wear||0)>0.7?'w':'u'}">🔧 Zustand ${Math.round((1-(b.wear||0))*100)} %</span>`;
   const st=statusOf(b)[0];
   if(st==="nicht verbunden") out+=`<br><span class="w">🔌 nicht ans Stromnetz angeschlossen</span>`;
   else if(st==="kein Strom"){ const def=Math.max(0,game.powerDemand-game.powerGen); out+=`<br><span class="w">⚠ Strom fehlt${def?` −${def} ⚡`:""}</span>`; }
@@ -1639,6 +1748,7 @@ function renderTech(){ const grid=document.getElementById('tt-grid'); grid.inner
   const hd=document.createElement('div'); hd.className='st-sec'; hd.style.gridColumn='1 / -1'; hd.style.margin='10px 0 0';
   hd.textContent='🧪 Neue Technologien'; grid.appendChild(hd);
   for(const key in RESEARCH){ const r=RESEARCH[key], done=!!game.research[key];
+    if(r.hardOnly && !isHard()) continue;
     const card=document.createElement('div'); card.className='tt-card';
     card.innerHTML=`<h3>${r.ic} ${r.name}</h3><div class="eff" style="color:var(--dim);font-family:var(--sans);line-height:1.4">${r.desc}</div>`+
       (done?`<button class="tt-buy" disabled>✓ Erforscht</button>`
@@ -1846,7 +1956,7 @@ function saveGame(){
       made:game.made, goalsDone:game.goalsDone, tech:game.tech, research:game.research, contracts:game.contracts,
       autobuy:document.getElementById('autobuy').checked,
       sup:Object.fromEntries(Object.keys(SUP).map(kk=>[kk,SUP[kk].stock])),
-      buildings:buildings.map(b=>({kind:b.kind,x:b.x,z:b.z,dir:b.dir,fixed:!!b.fixed,buf:b.buf,outBuf:b.outBuf,outType:b.outType,stored:b.stored,h2Buf:b.h2Buf||0,o2Buf:b.o2Buf||0,t:b.t,speedLvl:b.speedLvl||1,left:(b.left!=null&&isFinite(b.left))?b.left:undefined})),
+      buildings:buildings.map(b=>({kind:b.kind,x:b.x,z:b.z,dir:b.dir,fixed:!!b.fixed,buf:b.buf,outBuf:b.outBuf,outType:b.outType,stored:b.stored,h2Buf:b.h2Buf||0,o2Buf:b.o2Buf||0,t:b.t,speedLvl:b.speedLvl||1,left:(b.left!=null&&isFinite(b.left))?b.left:undefined,wear:b.wear||undefined,drilled:b.drilled?1:undefined})),
       items:items.filter(i=>!i._dead).map(i=>({type:i.type,x:i.x,z:i.z,prog:i.prog,dir:i.dir})) };
     const blob=new Blob([JSON.stringify(data)],{type:"application/json"});
     const url=URL.createObjectURL(blob); const a=document.createElement('a');
@@ -1857,7 +1967,8 @@ function saveGame(){
   }catch(e){ toast("Speichern fehlgeschlagen.",0xff5d6c); }
 }
 function clearFactory(){
-  for(const b of buildings){ scene.remove(b.mesh); if(b.labelEl) b.labelEl.remove(); }
+  for(const b of buildings){ scene.remove(b.mesh); if(b.labelEl) b.labelEl.remove();
+    if(b.droneList) for(const dr of b.droneList) scene.remove(dr.mesh); }
   buildings.length=0; grid_.clear();
   for(const it of items) scene.remove(it.mesh); items.length=0;
   for(const p of patches) scene.remove(p); patches.length=0;
@@ -1873,6 +1984,8 @@ function loadGame(d){
       nb.buf=sb.buf||{}; nb.outBuf=sb.outBuf||0; nb.outType=sb.outType||null; nb.stored=sb.stored||0;
       nb.h2Buf=sb.h2Buf||0; nb.o2Buf=sb.o2Buf||0; nb.t=sb.t||0; nb.fixed=!!sb.fixed; nb.speedLvl=sb.speedLvl||1;
       if(sb.left!=null) nb.left=sb.left;
+      if(sb.wear) nb.wear=sb.wear;
+      if(sb.drilled){ nb.drilled=true; attachDrill(nb); }
       if(nb.fixed && SOURCES[nb.kind]) addPatch(nb.kind,nb.x,nb.z);
     } } }
   placeDir=1;
