@@ -80,6 +80,8 @@
   button.big{font-family:var(--sans);font-weight:700;font-size:15px;cursor:pointer;border:1px solid var(--acc);
     background:#0c2b27;color:var(--acc);padding:12px 30px;border-radius:10px;margin-top:10px}
   button.big:hover{background:var(--acc);color:#04231f}
+  #start-medium{border-color:var(--warn);color:var(--warn);background:#2a1d0c}
+  #start-medium:hover{background:var(--warn);color:#241606}
   #start-hard{border-color:var(--bad);color:var(--bad);background:#2b0c10}
   #start-hard:hover{background:var(--bad);color:#240609}
   .hide{display:none!important}
@@ -158,9 +160,9 @@
     <button id="load-btn" title="Spielstand-Datei laden">📂 Laden</button>
     <input type="file" id="load-file" accept="application/json,.json" style="display:none">
     <button id="music-btn" class="ghost" title="Musik an/aus">🔊</button>
-    <button id="tech-btn" class="hide" title="Tech-Tree (nur Modus „schwer")">🔬 Tech-Tree</button>
-    <button id="stats-btn" class="hide" title="Statistik (nur Modus „schwer")">📊 Statistik</button>
-    <button id="market-btn" class="hide" title="Handelsplatz (nur Modus „schwer")">🤝 Handel</button>
+    <button id="tech-btn" class="hide" title="Tech-Tree (ab Modus „mittel“)">🔬 Tech-Tree</button>
+    <button id="stats-btn" class="hide" title="Statistik (ab Modus „mittel“)">📊 Statistik</button>
+    <button id="market-btn" class="hide" title="Handelsplatz (ab Modus „mittel“)">🤝 Handel</button>
     <span id="title">CHIPTORIO · FABRIK</span>
     <div class="stat"><span class="lbl">GELD</span><b id="s-money" style="color:var(--good)">—</b></div>
     <div class="stat"><span class="lbl">⚡ STROM (kWh)</span><b id="s-power">—</b></div>
@@ -186,14 +188,14 @@
 <div id="techtree" class="hide"><div class="tt-panel">
   <button class="tt-close" id="tt-close">✕ Schließen</button>
   <h2>🔬 Tech-Tree</h2>
-  <p class="tt-sub">Globale Upgrades (nur Modus „schwer"). Einzelne Maschinen upgradest du mit dem ⬆️-Werkzeug per Klick.</p>
+  <p class="tt-sub">Globale Upgrades (ab Modus „mittel“). Einzelne Maschinen upgradest du mit dem ⬆️-Werkzeug per Klick.</p>
   <div class="tt-grid" id="tt-grid"></div>
 </div></div>
 
 <div id="stats" class="hide"><div class="tt-panel">
   <button class="tt-close" id="stats-close">✕ Schließen</button>
   <h2>📊 Statistik</h2>
-  <p class="tt-sub">Live-Übersicht deiner Fabrik (nur Modus „schwer").</p>
+  <p class="tt-sub">Live-Übersicht deiner Fabrik (ab Modus „mittel“).</p>
   <div id="stats-body"></div>
 </div></div>
 
@@ -219,9 +221,10 @@
   <div style="font-family:var(--mono);font-size:12px;color:var(--dim);letter-spacing:2px;margin-top:4px">SCHWIERIGKEIT WÄHLEN</div>
   <div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:6px">
     <button class="big" id="start-easy">🟢 Einfach</button>
+    <button class="big" id="start-medium">🟠 Mittel</button>
     <button class="big" id="start-hard">🔴 Schwer</button>
   </div>
-  <p style="font-size:12px;color:var(--dim);max-width:560px;margin-top:8px"><b>Einfach:</b> entspannter Aufbau. &nbsp;<b>Schwer:</b> 4× größeres Feld &amp; mehr Startkapital; nur HCl ist kaufbar — alle übrigen Chemikalien (N₂ … Epoxidharz &amp; Argon) liegen als Vorkommen auf der Karte und müssen per 🧪 <b>Chemiefabrik</b> in die Vorräte umgewandelt werden.</p>
+  <p style="font-size:12px;color:var(--dim);max-width:640px;margin-top:8px"><b>Einfach:</b> entspannter Aufbau. &nbsp;<b>Mittel:</b> großes Feld, mehr Startkapital; nur HCl ist kaufbar — alle übrigen Chemikalien liegen als Vorkommen auf der Karte und laufen durch die 🧪 <b>Chemiefabrik</b>. &nbsp;<b>Schwer:</b> riesiges Feld, <b>auch HCl</b> nur als Vorkommen, alle Vorkommen sind <b>endlich</b> — sichere dir langfristig 📜 <b>Lieferverträge</b> im Handelsplatz.</p>
 </div>
 
 <script type="importmap">
@@ -236,7 +239,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 /* ===================== GRUND-DATEN ===================== */
-let N = 23; const S = 1; let HALF = (N-1)/2; // Spielfeld ~30% größer · Modus „schwer": 4× Fläche (N=46)
+let N = 23; const S = 1; let HALF = (N-1)/2; // Spielfeld ~30% größer · Modus „schwer“: 4× Fläche (N=46)
 const DIRS = [[0,-1],[1,0],[0,1],[-1,0]]; // N,E,S,W
 const ROT  = [Math.PI, Math.PI/2, 0, -Math.PI/2]; // Pfeil zeigt +z (Standard)
 
@@ -274,12 +277,14 @@ const SUP = {
 // Gebäude-Definitionen
 const DEF = {
   belt:      {name:"Förderband", ic:"➤", cost:5,   col:0x2b3a52, cat:"Logistik"},
+  cross:     {name:"Band-Kreuzung", ic:"✚", cost:14, col:0x2b3a52, cat:"Logistik"},
   pipe:      {name:"Rohr", ic:"🚰", cost:5, col:0x2a6a8a, cat:"Logistik"},
+  pipecross: {name:"Rohr-Kreuzung", ic:"➕", cost:14, col:0x2a6a8a, cat:"Logistik"},
   cable:     {name:"Stromkabel", ic:"🔌", cost:4, col:0x4a4426, cat:"Logistik"},
   gastank:   {name:"Gastank", ic:"🛢️", cost:120, col:0x6f6636, cat:"Logistik"},
-  sandmine:  {name:"Sandgrube", ic:"⛏️", cost:80,  col:0x6b5a3a, powerUse:3,  cat:"Rohstoff"},
-  coalmine:  {name:"Kohlemine", ic:"⚫", cost:90,  col:0x3a3a3a, powerUse:3,  cat:"Rohstoff"},
-  pump:      {name:"Wasserpumpe", ic:"💧", cost:120, col:0x2a8fb0, powerUse:6, cat:"Rohstoff"},
+  sandmine:  {name:"Sandgrube", ic:"⛏️", cost:80,  col:0x6b5a3a, powerUse:3,  size:[2,2], cat:"Rohstoff"},
+  coalmine:  {name:"Kohlemine", ic:"⚫", cost:90,  col:0x3a3a3a, powerUse:3,  size:[2,2], cat:"Rohstoff"},
+  pump:      {name:"Wasserpumpe", ic:"💧", cost:120, col:0x2a8fb0, powerUse:6, size:[2,2], cat:"Rohstoff"},
   solar:     {name:"Solarkraftwerk", ic:"☀️", cost:140, col:0x2e6da4, powerGen:25, cat:"Versorgung"},
   battery:   {name:"Energiespeicher", ic:"🔋", cost:200, col:0x2e8a5a, powerCap:300, cat:"Versorgung"},
   nuclear:   {name:"Atomkraftwerk", ic:"☢️", cost:2400, col:0x6a7a3a, powerGen:200, size:[3,2], cat:"Versorgung"},
@@ -300,24 +305,33 @@ const SOURCES = {
   pump:     {out:"water", time:1.1},
 };
 
-// ---- Modus „schwer": chemische Rohstoff-Vorkommen + Chemiefabrik ----
-// Nur HCl bleibt kaufbar; diese Stoffe (inkl. Argon) liegen als Vorkommen auf der Karte (Start-Vorrat 0)
+// ---- Modi „mittel“/„schwer“: chemische Rohstoff-Vorkommen + Chemiefabrik ----
+// Mittel: nur HCl bleibt kaufbar; die 9 Stoffe (inkl. Argon) liegen als Vorkommen auf der Karte (Start-Vorrat 0)
 // und werden über die Chemiefabrik wieder in die Vorräte umgefüllt (Fab/Packaging ziehen daraus).
+// Schwer: zusätzlich HCl als 10. Vorkommen, KEIN Auto-Nachschub, alle Vorkommen sind ENDLICH → 📜 Lieferverträge.
 const CHEM_KEYS=['n2','f2','resist','boron','phos','arsenic','copper','epoxy','ar'];
-const isChem = t => CHEM_KEYS.includes(t);
+const chemKeys = ()=> game.difficulty==='hard' ? [...CHEM_KEYS,'hcl'] : CHEM_KEYS;
+const isChem = t => chemKeys().includes(t);
 const CHEM_META={
   n2:{ic:'🟦',col:0x9fb8e0}, f2:{ic:'🟩',col:0xc9e26a}, resist:{ic:'🟧',col:0xe07a4a}, boron:{ic:'🟫',col:0x8a6a4a},
   phos:{ic:'🟢',col:0x8fe06a}, arsenic:{ic:'🟣',col:0x9a8fb0}, copper:{ic:'🟠',col:0xc77b4a}, epoxy:{ic:'🟡',col:0xd9b34a},
-  ar:{ic:'⬜',col:0xcdbce6}
+  ar:{ic:'⬜',col:0xcdbce6}, hcl:{ic:'🧪',col:0xbfe86a}
 };
-for(const kk of CHEM_KEYS){ const m=CHEM_META[kk];
+for(const kk of [...CHEM_KEYS,'hcl']){ const m=CHEM_META[kk];
   ITEMS[kk]={name:SUP[kk].name, col:m.col};                                              // Rohstoff als Förderband-Item
-  DEF['dep_'+kk]={name:SUP[kk].name+"-Vorkommen", ic:m.ic, col:m.col, powerUse:2, cat:"Rohstoff"}; // festes Vorkommen
+  DEF['dep_'+kk]={name:SUP[kk].name+"-Vorkommen", ic:m.ic, col:m.col, powerUse:2, size:[2,2], cat:"Rohstoff"}; // festes Vorkommen
   SOURCES['dep_'+kk]={out:kk, time:1.8};
 }
 DEF.chemfab={name:"Chemiefabrik", ic:"🧪", cost:1800, col:0x4a5a6a, powerUse:200, size:[8,3], cat:"Maschine"};
 const CHEM_TIME=1.0, CHEM_YIELD=3, CHEM_BUF_CAP=8; // Chemiefabrik: 1 Rohstoff → +CHEM_YIELD Vorrat alle CHEM_TIME s
-const HARD_MONEY=15000;                            // Startkapital im Modus „schwer"
+const MODE_MONEY={easy:5500, medium:15000, hard:22000}; // Startkapital je Modus
+const MODE_FIELD={easy:26, medium:50, hard:68};         // Feldgröße je Modus (Quellen belegen 2×2)
+// Schwer: endliche Vorkommen (Einheiten, bis „erschöpft“). Wasser bleibt unendlich.
+const DEPOSIT_AMOUNT=k=> k==='pump' ? Infinity : (k==='sandmine'||k==='coalmine') ? 1500 : 400;
+// Schwer: Lieferverträge — Abschlussgebühr, dann laufende Lieferung gegen laufende Kosten.
+const CONTRACT_FEE=1200, CONTRACT_RATE=20, CONTRACT_PRICE_MULT=2.5; // 20 Einheiten/min zu price×2.5
+const isAdv =()=> game.difficulty!=='easy';
+const isHard=()=> game.difficulty==='hard';
 
 // Rezepte: in = Items (Belt-Feststoffe + Rohr-Flüssigkeiten/Gase), sup = gekaufte Vorräte, out = Belt-Item.
 // Elektrolyseur ist Spezialfall: water → 2× H₂ + 1× O₂ (siehe tickWork).
@@ -332,15 +346,15 @@ const RECIPES = {
 };
 const CHIP_PRICE = 155;
 // Sandgrube/Kohlemine/Wasserpumpe sind NICHT baubar — sie werden beim Start zufällig auf der Karte verteilt.
-const TOOLS = ["belt","pipe","cable","solar","battery","nuclear","electrolyseur","gastank","furnace","siemens","crystal","waferplant","fab","packaging","seller","delete"];
+const TOOLS = ["belt","cross","pipe","pipecross","cable","solar","battery","nuclear","electrolyseur","gastank","furnace","siemens","crystal","waferplant","fab","packaging","seller","delete"];
 const TOOLMETA = { delete:{name:"Abriss",ic:"❌",cost:0}, upgrade:{name:"Upgrade",ic:"⬆️",cost:0} }; // Werkzeuge ohne Gebäude
-function toolList(){ // Chemiefabrik + Upgrade-Werkzeug nur im Modus „schwer"
-  if(game.difficulty!=='hard') return TOOLS;
+function toolList(){ // Chemiefabrik + Upgrade-Werkzeug nur in „mittel“/„schwer“
+  if(!isAdv()) return TOOLS;
   const t=TOOLS.slice(); t.splice(t.indexOf('seller'),0,'chemfab'); t.push('upgrade'); return t;
 }
-const GAS_CAP = 2000; // Gastank-Kapazität je Gas im Modus „einfach" (sehr groß = "Abfluss")
+const GAS_CAP = 2000; // Gastank-Kapazität je Gas im Modus „einfach“ (sehr groß = "Abfluss")
 
-// ---- Upgrades / Tech-Tree (nur Modus „schwer"; in „einfach" bleiben alle Stufen 1 = neutral) ----
+// ---- Upgrades / Tech-Tree (nur Modus „schwer“; in „einfach“ bleiben alle Stufen 1 = neutral) ----
 const SOLAR_MULT=[1,1.10,1.25], CARRIER_MULT=[1,1.5,2.0], MACHINE_MULT=[1,1.4,1.8], CAP_MULT=[1,1.5,2.0], CHIP_MULT=[1,1.6,2.4], GAS_CAP_HARD=[300,800,2000];
 const TECH_KEYS=['solar','battery','gastank','belt','pipe','chip'];
 const solarMult =()=>SOLAR_MULT[(game.tech.solar||1)-1];
@@ -351,7 +365,7 @@ const chipMult  =()=>CHIP_MULT[(game.tech.chip||1)-1];
 const chipPrice =()=>Math.round(CHIP_PRICE*chipMult());        // Verkaufswert pro Chip (inkl. End-Chip-Upgrade)
 const machineMult=lvl=>MACHINE_MULT[(lvl||1)-1];
 const capOf     =b=> (DEF[b.kind].powerCap||0)*batMult();      // effektive Akku-Kapazität (inkl. Upgrade)
-const gasCap    =()=> game.difficulty==='hard' ? GAS_CAP_HARD[(game.tech.gastank||1)-1] : GAS_CAP;
+const gasCap    =()=> isAdv() ? GAS_CAP_HARD[(game.tech.gastank||1)-1] : GAS_CAP;
 const TECH_COST={ solar:[800,2000], battery:[700,1800], gastank:[600,1500], belt:[1200,3000], pipe:[1000,2500], chip:[3000,8000] }; // Kosten Stufe1→2, Stufe2→3
 const TECH_INFO={
   solar:  {name:'Solarzellen',        ic:'☀️', eff:l=>['Basis-Ertrag','+10 % Ertrag','+25 % Ertrag'][l-1]},
@@ -367,8 +381,8 @@ const DAYLEN = 100; // Sekunden pro Tag/Nacht-Zyklus
 const game = { money:5500, chips:0, made:{}, goalsDone:{}, tech:{solar:1,battery:1,gastank:1,belt:1,pipe:1,chip:1},
   powerGen:0, powerDemand:0, powerOK:true, rate:0, soldWindow:[],
   storedPower:0, powerCap:0, timeOfDay:0.33, sun:1, speed:1, difficulty:'easy',
-  simTime:0, stats:{power:[],dem:[],rate:{},snap:{},acc:0}, market:{sat:{}} };
-function resetStatsMarket(){ game.simTime=0; game.stats={power:[],dem:[],rate:{},snap:{},acc:0}; game.market={sat:{}}; }
+  simTime:0, stats:{power:[],dem:[],rate:{},snap:{},acc:0}, market:{sat:{}}, contracts:{} };
+function resetStatsMarket(){ game.simTime=0; game.stats={power:[],dem:[],rate:{},snap:{},acc:0}; game.market={sat:{}}; game.contracts={}; }
 
 /* ===================== THREE SETUP ===================== */
 const renderer = new THREE.WebGLRenderer({antialias:true});
@@ -376,8 +390,8 @@ renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0e1626);
-scene.fog = new THREE.Fog(0x0e1626, 30, 64);
+scene.background = new THREE.Color(0x2a1208);
+scene.fog = new THREE.Fog(0x2a1208, 30, 64);
 const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.1, 200);
 camera.position.set(0, 20, 19);
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -385,34 +399,52 @@ controls.enableDamping = true; controls.dampingFactor = .09;
 controls.minDistance = 6; controls.maxDistance = 52; controls.maxPolarAngle = Math.PI*0.46;
 controls.target.set(0,0,0);
 
-const ambient = new THREE.AmbientLight(0xb4c6e4, .7); scene.add(ambient);
-const hemi = new THREE.HemisphereLight(0xcfe0ff, 0x1a2438, 1.0); scene.add(hemi);
+const ambient = new THREE.AmbientLight(0xe0c0a4, .7); scene.add(ambient);
+const hemi = new THREE.HemisphereLight(0xffd9b8, 0x3a2014, 1.0); scene.add(hemi);
 const key = new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(10,16,8); scene.add(key);
-const fill = new THREE.DirectionalLight(0xcfe0ff, .7); fill.position.set(-8,8,-6); scene.add(fill);
-const _dayBg=new THREE.Color(0x14233e), _nightBg=new THREE.Color(0x070b16), _warm=new THREE.Color(0xffd9a0), _whiteC=new THREE.Color(0xffffff);
+const fill = new THREE.DirectionalLight(0xffd0a8, .7); fill.position.set(-8,8,-6); scene.add(fill);
+const _dayBg=new THREE.Color(0xa8623e), _nightBg=new THREE.Color(0x0c0604), _warm=new THREE.Color(0xffd9a0), _whiteC=new THREE.Color(0xfff2e0);
 function applyDayNight(){ const s=game.sun;
   ambient.intensity=.13+.62*s; hemi.intensity=.18+.95*s; key.intensity=.12+1.6*s; fill.intensity=.2+.6*s;
   key.color.copy(_warm).lerp(_whiteC, Math.min(1,s*1.4));
   scene.background.copy(_nightBg).lerp(_dayBg, s); scene.fog.color.copy(scene.background);
 }
 
-// Boden + Gitter — in setFieldSize() aufgebaut, da der Modus „schwer" ein 4× größeres Feld nutzt.
-let ground=null, grid=null;
+// Boden + Gitter — in setFieldSize() aufgebaut (Feldgröße hängt vom Modus ab). Mars-Optik per CanvasTexture.
+let ground=null, grid=null, _marsTex=null;
+function marsTexture(){
+  if(_marsTex) return _marsTex;
+  const c=document.createElement('canvas'); c.width=c.height=512; const x=c.getContext('2d');
+  x.fillStyle='#8a4526'; x.fillRect(0,0,512,512);
+  for(let i=0;i<9000;i++){ // Staub/Geröll-Sprenkel
+    const px=Math.random()*512, py=Math.random()*512, r=.4+Math.random()*1.9, sh=Math.random();
+    x.fillStyle=`rgba(${120+sh*95|0},${52+sh*42|0},${28+sh*24|0},${.22+Math.random()*.3})`;
+    x.beginPath(); x.arc(px,py,r,0,7); x.fill();
+  }
+  for(let i=0;i<28;i++){ // Krater: dunkle Mulde + heller Rand (Licht von oben links)
+    const px=Math.random()*512, py=Math.random()*512, r=4+Math.random()*15;
+    x.fillStyle='rgba(46,20,10,.30)'; x.beginPath(); x.arc(px,py,r,0,7); x.fill();
+    x.strokeStyle='rgba(52,22,12,.55)'; x.lineWidth=2; x.stroke();
+    x.strokeStyle='rgba(235,160,110,.35)'; x.beginPath(); x.arc(px-1.5,py-1.5,r,0,7); x.stroke();
+  }
+  _marsTex=new THREE.CanvasTexture(c); _marsTex.wrapS=_marsTex.wrapT=THREE.RepeatWrapping;
+  _marsTex.anisotropy=4; return _marsTex;
+}
 function setFieldSize(n){
   N=n; HALF=(N-1)/2;
   if(ground){ scene.remove(ground); ground.geometry.dispose(); }
   if(grid){ scene.remove(grid); grid.geometry.dispose(); }
+  const tex=marsTexture().clone(); tex.needsUpdate=true; tex.repeat.set(N/10,N/10); tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
   ground = new THREE.Mesh(new THREE.PlaneGeometry(N*S, N*S),
     // emissiver Boden: bleibt auch nachts (wenn die Lichter gedimmt sind) deutlich heller als der Hintergrund
-    new THREE.MeshStandardMaterial({color:0x1b2f50, roughness:.95, emissive:0x233a60, emissiveIntensity:.7}));
+    new THREE.MeshStandardMaterial({map:tex, color:0xc98a62, roughness:.97, emissive:0x6a3018, emissiveIntensity:.5}));
   ground.rotation.x = -Math.PI/2; ground.position.y = 0; scene.add(ground);
-  grid = new THREE.GridHelper(N*S, N, 0x6e93cc, 0x47659a); // heller, hebt sich nachts besser ab
-  grid.position.y = 0.01; grid.material.transparent=true; grid.material.opacity=.62; scene.add(grid);
-  const big = n>30;
-  scene.fog.near = big?55:30; scene.fog.far = big?150:64;
-  controls.maxDistance = big?130:52;
+  grid = new THREE.GridHelper(N*S, N, 0xf0b080, 0xa86038); // warme Gitterlinien passend zum Mars-Boden
+  grid.position.y = 0.01; grid.material.transparent=true; grid.material.opacity=.4; scene.add(grid);
+  scene.fog.near = Math.max(30, N*1.2); scene.fog.far = Math.max(64, N*2.9);
+  controls.maxDistance = Math.max(52, N*2.6);
 }
-setFieldSize(23);
+setFieldSize(MODE_FIELD.easy);
 
 addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
 
@@ -463,14 +495,36 @@ function makeMesh(kind,dir){
     buildPipeVisual(g, dir, null);         // Standard gerade; Ecken nach dem Platzieren via refreshPipe
     return g;
   }
-  if(kind.startsWith("dep_")){ // chemisches Rohstoff-Vorkommen (Modus „schwer")
+  if(kind==="cross"){ // Band-Kreuzung: zwei unabhängige Spuren, Items laufen geradeaus durch
+    add(B(.92,.06,.92,0x1a2740,{roughness:.85}),0,.03,0);
+    add(B(.96,.05,.52,0x33455f,{roughness:.7}),0,.07,0);                    // Spur West↔Ost
+    add(B(.52,.05,.96,0x3d5170,{roughness:.7}),0,.115,0);                   // Spur Nord↔Süd (leicht erhöht)
+    add(B(.1,.1,.1,0x66d0ff,{emissive:0x123244,emissiveIntensity:.8}),0,.19,0); // Mittel-Knoten
+    return g;
+  }
+  if(kind==="pipecross"){ // Rohr-Kreuzung: eine Leitung unten, die andere als Brücke darüber
+    add(B(.92,.05,.92,0x16323e),0,.025,0);
+    const geo1=new THREE.CylinderGeometry(.16,.16,1.0,14); geo1.rotateZ(Math.PI/2);
+    add(new THREE.Mesh(geo1,_pipeMat()),0,.18,0);                            // unten West↔Ost
+    const geo2=new THREE.CylinderGeometry(.13,.13,1.0,12); geo2.rotateX(Math.PI/2);
+    add(new THREE.Mesh(geo2,_pipeMat()),0,.5,0);                             // Brücke Nord↔Süd
+    add(C(.13,.13,.34,0x57b6d8,{metalness:.6,roughness:.3}),0,.33,-.5);      // Stützen der Brücke
+    add(C(.13,.13,.34,0x57b6d8,{metalness:.6,roughness:.3}),0,.33,.5);
+    return g;
+  }
+  if(kind.startsWith("dep_")){ // chemisches Rohstoff-Vorkommen (2×2): Kristall-Ausbiss + Bohrmast
     const c=DEF[kind].col;
-    add(B(.8,.26,.8,0x3a3320),0,.13,0);
-    add(C(.26,.3,.5,c,{metalness:.4,roughness:.5}),0,.34,0);
-    add(C(.28,.28,.06,0x222222),0,.6,0);
-    add(SP(.16,c,{emissive:c,emissiveIntensity:.5,transparent:true,opacity:.85}),0,.62,0);
-    const ind=SP(.1,0x44ff88,{emissive:0x115522,emissiveIntensity:1}); add(ind,0,.92,0); g.userData.ind=ind;
-    g.rotation.y=ROT[dir]; return g;
+    add(B(1.8,.16,1.8,0x4a2c1a,{roughness:.95}),0,.08,0);                    // felsige Plattform
+    add(B(1.55,.08,1.55,0x5c3a22,{roughness:.9}),0,.2,0);
+    // Kristall-Cluster in der Stoff-Farbe
+    [[0,.62,-.2,.3],[-.45,.5,.25,.22],[.4,.46,.3,.2],[.25,.38,-.45,.16],[-.3,.34,-.4,.14]].forEach(p=>
+      add(CO(p[3],p[1],c,{metalness:.3,roughness:.35,emissive:c,emissiveIntensity:.45,transparent:true,opacity:.92},5),p[0],.24+p[1]/2,p[2]));
+    // kleiner Bohrmast mit Extraktor
+    add(C(.05,.05,.9,0x8a94a2,{metalness:.7}), .62,.68,.6);
+    add(B(.3,.16,.3,0x2e3a48,{metalness:.5}), .62,.3,.6);
+    add(C(.1,.1,.07,0x222222), .62,1.14,.6);
+    const ind=SP(.1,0x44ff88,{emissive:0x115522,emissiveIntensity:1}); add(ind,.62,1.3,.6); g.userData.ind=ind;
+    return g; // achsenparallel, keine Rotation (2×2 symmetrisch)
   }
   if(kind==="chemfab"){ // Chemiefabrik 8×3 — per Q drehbar (quer/hochkant)
     const W=8*S, H=3*S;
@@ -485,19 +539,43 @@ function makeMesh(kind,dir){
     g.rotation.y=(dir===0||dir===2)?Math.PI/2:0; // hochkant bei Nord/Süd
     return g;
   }
+  // Fundament-Pad: verankert jedes Gebäude optisch im Mars-Boden
+  { const fpz=DEF[kind]&&DEF[kind].size?DEF[kind].size:[1,1];
+    add(B(fpz[0]*S-.06,.04,fpz[1]*S-.06,0x2b1a10,{roughness:.95}),0,.02,0); }
   switch(kind){
-    case "sandmine": // Grube + Sandhaufen
-      add(B(.8,.26,.8,0x5a4a30),0,.13,0);
-      add(CO(.34,.42,0xd9c08a,{},16),0,.48,0); indY=.92; break;
-    case "coalmine": // Haufen schwarzer Brocken
-      add(B(.8,.26,.8,0x2e2e2e),0,.13,0);
-      add(SP(.17,0x1b1b1b),0,.38,-.05); add(SP(.15,0x262626),.18,.36,.12); add(SP(.14,0x141414),-.16,.34,.14); indY=.74; break;
-    case "solar": // gekippte Panele auf Pfosten
+    case "sandmine": { // 2×2: Abbaugrube mit Dünen + Bagger-Ausleger
+      add(B(1.8,.18,1.8,0x6a5335,{roughness:.9}),0,.09,0);
+      add(B(1.5,.06,1.5,0x3c2e1a,{roughness:.95}),0,.2,0);                    // dunkle Grube
+      add(CO(.42,.5,0xd9c08a,{roughness:.9},18),-.3,.48,-.25);                // Sanddünen
+      add(CO(.3,.36,0xcbb078,{roughness:.9},14),.35,.4,.3);
+      add(CO(.2,.26,0xe4cf9e,{roughness:.9},12),.15,.35,-.42);
+      add(C(.07,.07,.7,0x8a7a55,{metalness:.5}),.62,.55,-.55);                // Baggermast
+      add(B(.85,.08,.14,0x9a8a60,{metalness:.4}),.28,.86,-.55,0,0,.35);       // Ausleger zur Grube
+      add(SP(.11,0x5a4a30),-.1,1.0,-.55); indY=1.15; break; }
+    case "coalmine": { // 2×2: Förderturm mit Seilrad + Kohlehalden + Lore
+      add(B(1.8,.18,1.8,0x30302e,{roughness:.9}),0,.09,0);
+      add(B(.1,1.1,.1,0x4a4a48,{metalness:.4}),-.5,.7,-.42); add(B(.1,1.1,.1,0x4a4a48,{metalness:.4}),-.14,.7,-.42); // Turmbeine
+      add(B(.1,1.1,.1,0x4a4a48,{metalness:.4}),-.5,.7,-.06); add(B(.1,1.1,.1,0x4a4a48,{metalness:.4}),-.14,.7,-.06);
+      add(B(.5,.3,.5,0x3a3a38),-.32,1.28,-.24);                              // Turmhaus
+      { const wh=new THREE.Mesh(new THREE.TorusGeometry(.16,.04,8,18),mat(0x777777,{metalness:.7})); wh.position.set(-.32,1.56,-.24); add(wh); }
+      add(SP(.24,0x1b1b1b),.4,.32,-.35); add(SP(.2,0x262626),.55,.3,.2);      // Kohlehalden
+      add(SP(.18,0x141414),.15,.28,.45); add(SP(.14,0x222222),-.35,.26,.45);
+      add(B(.34,.16,.22,0x5a4a3a),-.05,.24,.05); add(SP(.09,0x1b1b1b),-.05,.35,.05); // Lore mit Kohle
+      indY=1.85; break; }
+    case "solar": // gekippte Doppel-Panele auf Pfosten
       add(B(.12,.34,.12,0x3a4658),0,.17,0);
-      add(B(.74,.04,.52,0x163a6a,{emissive:0x1f56a0,emissiveIntensity:.6,metalness:.4,roughness:.3}),0,.42,0,-0.5); indY=.74; break;
-    case "pump": // Tank + Rohr
-      add(C(.3,.3,.5,0x2a8fb0,{metalness:.5}),0,.3,0);
-      add(C(.32,.32,.06,0x1d6f8a),0,.57,0); add(B(.1,.46,.1,0x1d6f8a),.34,.27,0); indY=.84; break;
+      add(B(.74,.04,.5,0x163a6a,{emissive:0x1f56a0,emissiveIntensity:.6,metalness:.4,roughness:.3}),0,.42,-.02,-0.5);
+      add(B(.74,.03,.2,0x1d478a,{emissive:0x2a62b8,emissiveIntensity:.5,metalness:.4,roughness:.3}),0,.28,.32,-0.5); indY=.74; break;
+    case "pump": { // 2×2: Wasserbecken + Pumpenhaus + Bohr-Schwengel
+      add(B(1.8,.16,1.8,0x24506a,{roughness:.85}),0,.08,0);
+      add(C(.62,.66,.16,0x1d6f8a),-.35,.22,-.3,0,0,0,24);                     // Beckenrand
+      add(C(.56,.56,.05,0x3fa9e0,{emissive:0x1d6fa0,emissiveIntensity:.7,transparent:true,opacity:.85},24),-.35,.3,-.3); // Wasserfläche
+      add(B(.6,.5,.5,0x2a8fb0,{metalness:.4}),.5,.33,.45);                    // Pumpenhaus
+      add(B(.64,.06,.54,0x1d6f8a),.5,.6,.45);
+      add(C(.09,.09,.8,0x9fc4d4,{metalness:.6}),.5,.5,-.3,Math.PI/2);         // Rohr zum Becken
+      add(B(.08,.5,.08,0x6a8a9a,{metalness:.5}),-.3,.6,.5);                   // Schwengel-Pumpe
+      add(B(.5,.07,.1,0x8aa8b8,{metalness:.5}),-.15,.86,.5,0,0,.3);
+      indY=.95; break; }
     case "battery": // Energiespeicher (Akku mit Pluspol + gelbem Streifen)
       add(B(.62,.46,.7,0x2e8a5a,{metalness:.3}),0,.25,0);
       add(B(.16,.07,.16,0x9fe0b0),0,.51,0);
@@ -592,6 +670,7 @@ function pipeInflow(b){
   const opp=(b.dir+2)%4;
   const feeds=s=>{ const nx=b.x+DIRS[s][0], nz=b.z+DIRS[s][1]; const nb=grid_.get(k(nx,nz)); if(!nb) return false;
     if(nb.kind==="pipe") return nb.x+DIRS[nb.dir][0]===b.x && nb.z+DIRS[nb.dir][1]===b.z; // Nachbar-Rohr zeigt herein
+    if(nb.kind==="pipecross") return true; // Kreuzung: die durchlaufende Spur kann herein liefern
     return nb.kind==="pump"||nb.kind==="electrolyseur"||nb.kind==="gastank"; // Fluid-Quellen (inkl. Gastank-Abfluss) geben rundum ab
   };
   if(feeds(opp)) return opp;                       // gerade bevorzugt
@@ -623,6 +702,7 @@ function beltInflow(b){
   const opp=(b.dir+2)%4;
   const feeds=s=>{ const nx=b.x+DIRS[s][0], nz=b.z+DIRS[s][1]; const nb=grid_.get(k(nx,nz)); if(!nb) return false;
     if(nb.kind==="belt") return nb.x+DIRS[nb.dir][0]===b.x && nb.z+DIRS[nb.dir][1]===b.z; // Nachbar-Band zeigt herein
+    if(nb.kind==="cross") return true; // Kreuzung: die durchlaufende Spur kann herein liefern
     const out = SOURCES[nb.kind]?SOURCES[nb.kind].out : (RECIPES[nb.kind]?RECIPES[nb.kind].out:null);
     return out && !isFluid(out); // Quelle/Maschine, die Feststoffe ausgibt
   };
@@ -641,22 +721,27 @@ function refreshPipesAround(x,z){ // erfrischt Rohre UND Bänder (Ecken) rund um
 
 /* ===================== ITEMS ===================== */
 const SPEED = 1.15, SPACING = 0.34;
+const isCarrier = b => b.kind==="belt"||b.kind==="pipe"||b.kind==="cross"||b.kind==="pipecross";
+const isCrossing = b => b.kind==="cross"||b.kind==="pipecross";
+// Effektive Laufrichtung eines Items: auf Kreuzungen behält es seine eigene Richtung (geradeaus durch).
+const itemDir = (it,b)=> isCrossing(b) ? (it.dir!=null?it.dir:2) : b.dir;
 const itemGeo = new THREE.BoxGeometry(.26,.26,.26);
 const fluidGeo = new THREE.SphereGeometry(.16,10,10);
-function makeItem(type,x,z,prog){
+function makeItem(type,x,z,prog,dir){
   const fl=isFluid(type);
   const m = new THREE.Mesh(fl?fluidGeo:itemGeo, mat(ITEMS[type].col,{metalness:fl?.1:.4,roughness:fl?.25:.4,
     emissive:ITEMS[type].col, emissiveIntensity:fl?.3:.12, transparent:fl, opacity:fl?.9:1}));
   scene.add(m);
-  const it = {type,x,z,prog,mesh:m,_dead:false};
+  const it = {type,x,z,prog,dir,mesh:m,_dead:false};
+  const b=grid_.get(k(x,z)); if(it.dir==null && b && isCarrier(b)) it.dir=b.dir;
   items.push(it); placeItemMesh(it); return it;
 }
 function placeItemMesh(it){
-  const b = grid_.get(k(it.x,it.z)); const d = b&&(b.kind==="belt"||b.kind==="pipe")?DIRS[b.dir]:[0,1];
+  const b = grid_.get(k(it.x,it.z)); const d = b&&isCarrier(b)?DIRS[itemDir(it,b)]:[0,1];
   const [wx,wz]=tileToWorld(it.x,it.z);
   it.mesh.position.set(wx+d[0]*(it.prog-0.5)*S, 0.2, wz+d[1]*(it.prog-0.5)*S);
 }
-const carrierOk = (b,type)=> (b.kind==="belt"&&!isFluid(type)) || (b.kind==="pipe"&&isFluid(type));
+const carrierOk = (b,type)=> ((b.kind==="belt"||b.kind==="cross")&&!isFluid(type)) || ((b.kind==="pipe"||b.kind==="pipecross")&&isFluid(type));
 function occupiedStart(x,z){ for(const it of items){ if(!it._dead&&it.x===x&&it.z===z&&it.prog<SPACING) return true; } return false; }
 function machineAccepts(b,type){
   if(b.kind==="chemfab") return isChem(type) && (b.buf[type]||0) < CHEM_BUF_CAP; // Chemiefabrik nimmt die 8 Rohstoffe
@@ -666,11 +751,15 @@ function sellChip(){ game.money += chipPrice(); game.chips++; game.soldWindow.pu
 // Versuch, ein Item an Nachbarfeld (nx,nz) auszugeben — von der Quell-Zelle (fx,fz) kommend.
 function tryDeposit(type,nx,nz,fx,fz){
   const nb=grid_.get(k(nx,nz)); if(!nb) return false;
-  if(nb.kind==="belt"||nb.kind==="pipe"){
+  if(isCarrier(nb)){
     if(!carrierOk(nb,type)) return false;
-    // NUR exportieren, wenn das Band/Rohr dieses Quellfeld als Zufluss „ansaugt" (gerade ODER als Kurve).
-    // Verhindert Auswurf auf bloß „vorbeilaufende" Bahnen, erlaubt aber kurvige Export-Ausgänge.
-    let s0=-1; for(let s=0;s<4;s++){ if(DIRS[s][0]===fx-nx && DIRS[s][1]===fz-nz){ s0=s; break; } } // Seite des Bandes, die zur Quelle zeigt
+    let s0=-1; for(let s=0;s<4;s++){ if(DIRS[s][0]===fx-nx && DIRS[s][1]===fz-nz){ s0=s; break; } } // Seite des Trägers, die zur Quelle zeigt
+    if(isCrossing(nb)){ // Kreuzung: Item läuft von der Quelle weg geradeaus weiter
+      if(occupiedStart(nx,nz)) return false;
+      makeItem(type,nx,nz,0.05,(s0+2)%4); return true;
+    }
+    // NUR exportieren, wenn das Band/Rohr dieses Quellfeld als Zufluss „ansaugt“ (gerade ODER als Kurve).
+    // Verhindert Auswurf auf bloß „vorbeilaufende“ Bahnen, erlaubt aber kurvige Export-Ausgänge.
     if((nb.kind==="belt"?beltInflow(nb):pipeInflow(nb))!==s0) return false;
     if(occupiedStart(nx,nz)) return false;
     makeItem(type,nx,nz,0.05); return true;
@@ -718,14 +807,17 @@ function moveItems(dt){
   for(const it of items){
     if(it._dead) continue;
     const b = grid_.get(k(it.x,it.z));
-    if(!b || (b.kind!=="belt"&&b.kind!=="pipe")){ it._dead=true; scene.remove(it.mesh); continue; }
-    const d = DIRS[b.dir];
+    if(!b || !isCarrier(b)){ it._dead=true; scene.remove(it.mesh); continue; }
+    const bd = itemDir(it,b); it.dir=bd; // auf Band/Rohr: Trägerrichtung übernehmen; auf Kreuzung: geradeaus
+    const d = DIRS[bd];
     let cap = 1.0;
-    for(const o of items){ if(o!==it && !o._dead && o.x===it.x && o.z===it.z && o.prog>it.prog) cap=Math.min(cap,o.prog-SPACING); }
-    let np = it.prog + SPEED*(b.kind==="pipe"?pipeMult():beltMult())*dt; if(np>cap) np=cap;
+    for(const o of items){ if(o!==it && !o._dead && o.x===it.x && o.z===it.z && o.prog>it.prog
+      && (!isCrossing(b) || o.dir===bd)) cap=Math.min(cap,o.prog-SPACING); } // Kreuzung: nur eigene Spur blockiert
+    const fluid = b.kind==="pipe"||b.kind==="pipecross";
+    let np = it.prog + SPEED*(fluid?pipeMult():beltMult())*dt; if(np>cap) np=cap;
     if(np>=1){
       const nx=it.x+d[0], nz=it.z+d[1]; const nb=grid_.get(k(nx,nz));
-      if(nb && (nb.kind==="belt"||nb.kind==="pipe") && carrierOk(nb,it.type) && !occupiedStart(nx,nz)){ it.x=nx; it.z=nz; it.prog=0.0; }
+      if(nb && isCarrier(nb) && carrierOk(nb,it.type) && !occupiedStart(nx,nz)){ it.x=nx; it.z=nz; it.prog=0.0; }
       else if(nb && RECIPES[nb.kind] && machineAccepts(nb,it.type)){ nb.buf[it.type]=(nb.buf[it.type]||0)+1; it._dead=true; scene.remove(it.mesh); continue; }
       else if(nb && nb.kind==="chemfab" && machineAccepts(nb,it.type)){ nb.buf[it.type]=(nb.buf[it.type]||0)+1; it._dead=true; scene.remove(it.mesh); continue; }
       else if(nb && nb.kind==="gastank" && isFluid(it.type) && (nb.buf[it.type]||0)<gasCap()){ nb.buf[it.type]=(nb.buf[it.type]||0)+1; it._dead=true; scene.remove(it.mesh); continue; }
@@ -746,7 +838,7 @@ function computeUtilities(dt){
   for(const b of buildings){ if(RECIPES[b.kind]){
     if(b.kind==="electrolyseur") b.want = (b.h2Buf||0)<=0 && (b.o2Buf||0)<=0 && hasInputs(b);
     else b.want = b.outBuf===0 && hasInputs(b) && hasSupplies(b);
-  } else if(b.kind==="chemfab"){ b.want = CHEM_KEYS.some(kk=>(b.buf[kk]||0)>0); } }
+  } else if(b.kind==="chemfab"){ b.want = chemKeys().some(kk=>(b.buf[kk]||0)>0); } }
 
   // ---- STROMNETZE (per Kabel verbunden) ----
   const parent={};
@@ -792,13 +884,15 @@ function tickWork(dt){
     if(SOURCES[b.kind]){
       const s=SOURCES[b.kind];
       const powered = !DEF[b.kind].powerUse || b.powered;
+      const depleted = b.left!=null && b.left<=0; // Modus „schwer“: Vorkommen ist endlich
       if(b.outBuf>0){ if(spawnOut(b,s.out)) b.outBuf=0; }
-      else if(powered){ b.t+=dt; if(b.t>=s.time){ b.t=0; if(!spawnOut(b,s.out)) b.outBuf=1; } }
+      else if(powered && !depleted){ b.t+=dt; if(b.t>=s.time){ b.t=0;
+        if(!spawnOut(b,s.out)) b.outBuf=1; if(b.left!=null) b.left--; } }
     } else if(b.kind==="gastank"){
       tankEmit(b);
-    } else if(b.kind==="chemfab"){ // wandelt eingehende Roh-Chemikalien in Vorräte um (Modus „schwer")
+    } else if(b.kind==="chemfab"){ // wandelt eingehende Roh-Chemikalien in Vorräte um („mittel“/„schwer“)
       if(b.powered && b.want){ b.t+=dt; if(b.t>=CHEM_TIME/machineMult(b.speedLvl)){ b.t=0;
-        for(const kk of CHEM_KEYS){ if((b.buf[kk]||0)>0){ b.buf[kk]--; SUP[kk].stock+=CHEM_YIELD; } } } }
+        for(const kk of chemKeys()){ if((b.buf[kk]||0)>0){ b.buf[kk]--; SUP[kk].stock+=CHEM_YIELD; } } } }
     } else if(b.kind==="electrolyseur"){
       electroEmit(b);
       const r=RECIPES.electrolyseur;
@@ -819,9 +913,10 @@ function tickWork(dt){
 let autoTimer=0;
 function autoBuy(dt){
   if(!document.getElementById('autobuy').checked) return;
+  if(isHard()) return; // „schwer“: KEIN Auto-Nachschub — Vorkommen abbauen oder 📜 Lieferverträge abschließen
   autoTimer+=dt; if(autoTimer<0.5) return; autoTimer=0;
   for(const key in SUP){ const s=SUP[key];
-    if(game.difficulty==="hard" && key!=="hcl") continue; // im Modus „schwer" nur HCl kaufbar
+    if(isAdv() && key!=="hcl") continue; // „mittel“: nur HCl kaufbar
     if(s.stock<25){ const batch=40, cost=batch*s.price; if(game.money>=cost){ s.stock+=batch; game.money-=cost; } }
   }
 }
@@ -833,8 +928,12 @@ function statusOf(b){
   if(b.kind==="electrolyseur"){ if((b.h2Buf||0)>0||(b.o2Buf||0)>0) return ["gibt H₂/O₂ ab",0x44ff88]; if((b.buf.water||0)>=2) return ["läuft",0x44ff88]; return ["wartet auf Wasser",0xff5d6c]; }
   if(b.kind==="gastank"){ const c=gasCap(), h=Math.round(b.buf.h2||0), o=Math.round(b.buf.o2||0), w=Math.round(b.buf.water||0);
     const full=Math.max(h,o,w)>=c*0.999; return ["🛢️ H₂ "+h+"/"+c+" · O₂ "+o+"/"+c+(w?(" · 💧"+w):"")+(full?" · VOLL":""), full?0xffd24a:0x44ff88]; }
-  if(b.kind==="chemfab"){ const tot=CHEM_KEYS.reduce((s,kk)=>s+(b.buf[kk]||0),0); return tot>0?["wandelt um",0x44ff88]:["wartet auf Rohstoffe",0xffd24a]; }
-  if(SOURCES[b.kind]){ if(b.outBuf>0) return ["Ausgang voll",0xffd24a]; return ["läuft",0x44ff88]; }
+  if(b.kind==="chemfab"){ const tot=chemKeys().reduce((s,kk)=>s+(b.buf[kk]||0),0); return tot>0?["wandelt um",0x44ff88]:["wartet auf Rohstoffe",0xffd24a]; }
+  if(b.kind==="cross"||b.kind==="pipecross") return ["Kreuzung — beide Richtungen laufen geradeaus durch",0x44ff88];
+  if(SOURCES[b.kind]){
+    if(b.left!=null && b.left<=0) return ["ERSCHÖPFT",0x8a8a8a];
+    if(b.outBuf>0) return ["Ausgang voll",0xffd24a];
+    return [b.left!=null&&isFinite(b.left)?("läuft · noch "+Math.max(0,Math.ceil(b.left))+" Einheiten"):"läuft",0x44ff88]; }
   if(RECIPES[b.kind]){
     if(b.outBuf>0) return ["Ausgang voll",0xffd24a];
     if(!hasInputs(b)){ const r=RECIPES[b.kind], miss=[]; for(const key in r.in) if((b.buf[key]||0)<r.in[key]) miss.push(ITEMS[key].name); return ["wartet auf "+miss.join(" + "),0xff5d6c]; }
@@ -879,7 +978,7 @@ function place(kind,x,z,free){
   mesh.position.set(cwx,0,cwz); scene.add(mesh);
   const b = {kind,x,z,dir:placeDir,cells,mesh,t:0,buf:{},outBuf:0,outType:null,want:false,stored:0,powered:false,wired:false,speedLvl:1,fixed:!!free};
   for(const [cx,cz] of cells) grid_.set(k(cx,cz),b);
-  if(kind!=="belt" && kind!=="pipe" && kind!=="cable"){ const lab=document.createElement('div'); lab.className="blabel"; document.getElementById('labels').appendChild(lab); b.labelEl=lab; }
+  if(kind!=="belt" && kind!=="pipe" && kind!=="cable" && kind!=="cross" && kind!=="pipecross"){ const lab=document.createElement('div'); lab.className="blabel"; document.getElementById('labels').appendChild(lab); b.labelEl=lab; }
   buildings.push(b);
   for(const [cx,cz] of cells) refreshPipesAround(cx,cz); // Rohr-Ecken (neu + Nachbarn) aktualisieren
   return true;
@@ -912,7 +1011,7 @@ function applyTool(t){ if(!t) return;
   if(tool==="upgrade") return upgradeAt(t.x,t.z);
   place(tool,t.x,t.z);
 }
-// Einzelne Maschine per ⬆️-Werkzeug auf mehr Speed upgraden (nur „schwer"; bis Stufe 3)
+// Einzelne Maschine per ⬆️-Werkzeug auf mehr Speed upgraden (nur „schwer“; bis Stufe 3)
 function upgradeAt(x,z){
   const b=grid_.get(k(x,z)); if(!b) return;
   if(!(RECIPES[b.kind]||b.kind==="electrolyseur"||b.kind==="chemfab")){ toast("Nur Maschinen lassen sich upgraden.",0xffb454); return; }
@@ -938,8 +1037,16 @@ dom.addEventListener('pointermove',e=>{
   if(Math.abs(e.clientX-downX)+Math.abs(e.clientY-downY)>6) dragged=true;
   updateTip(e);
   if(laying && hoverTile && (hoverTile.x!==lastTile.x||hoverTile.z!==lastTile.z)){
-    if(tool==="belt"||tool==="pipe"||tool==="cable"){ const dd=dirFromDelta(hoverTile.x-lastTile.x, hoverTile.z-lastTile.z); if(dd>=0) placeDir=dd; }
-    applyTool(hoverTile); lastTile=hoverTile;
+    // Zellenweise vom letzten zum aktuellen Feld laufen (erst die längere Achse) — schnelles Ziehen
+    // überspringt sonst Felder und 90°-Kurven werden nicht erkannt.
+    let cx=lastTile.x, cz=lastTile.z, guard=0;
+    while((cx!==hoverTile.x||cz!==hoverTile.z) && guard++<200){
+      const dx=hoverTile.x-cx, dz=hoverTile.z-cz;
+      const sx=Math.abs(dx)>=Math.abs(dz)?Math.sign(dx):0, sz=sx?0:Math.sign(dz);
+      if(tool==="belt"||tool==="pipe"||tool==="cable"){ const dd=dirFromDelta(sx,sz); if(dd>=0) placeDir=dd; }
+      cx+=sx; cz+=sz; applyTool({x:cx,z:cz});
+    }
+    lastTile=hoverTile;
   }
 });
 window.addEventListener('pointerup',e=>{
@@ -994,7 +1101,7 @@ function updateGhost(){
   if(tool==="belt"||tool==="pipe"){
     if(ghost.userData.gdir!==placeDir){ (tool==="belt"?buildBeltVisual:buildPipeVisual)(ghost, placeDir, null); dimGhost(ghost); ghost.userData.gdir=placeDir; }
   } else if(tool==="chemfab"){ ghost.rotation.y=(placeDir===0||placeDir===2)?Math.PI/2:0; }
-  else if(tool!=="delete" && tool!=="upgrade"){ ghost.rotation.y=ROT[placeDir]; }
+  else if(tool!=="delete" && tool!=="upgrade" && tool!=="cross" && tool!=="pipecross"){ ghost.rotation.y=ROT[placeDir]; } // Kreuzungen sind achsenparallel
   const sz=(tool!=="delete"&&tool!=="upgrade"&&DEF[tool])?footprint(tool,placeDir):[1,1];
   const x=hoverTile.x,z=hoverTile.z;
   const cwx=(x+(sz[0]-1)/2 - HALF)*S, cwz=(z+(sz[1]-1)/2 - HALF)*S;
@@ -1007,12 +1114,12 @@ function updateTip(e){
   const t=pickTile(e); const b=t&&grid_.get(k(t.x,t.z));
   if(b){ const [st]=statusOf(b); let extra="";
     if(RECIPES[b.kind]){ const bufs=Object.entries(b.buf).filter(([,v])=>v>0).map(([kk,v])=>ITEMS[kk].name+"×"+v).join(", "); extra=bufs?("\nLager: "+bufs):""; }
-    if(b.kind==="belt"||b.kind==="pipe"){ const cnt={};
+    if(isCarrier(b)){ const cnt={};
       for(const it of items){ if(!it._dead&&it.x===t.x&&it.z===t.z) cnt[it.type]=(cnt[it.type]||0)+1; }
       const ks=Object.keys(cnt);
       extra="\nInhalt: "+(ks.length?ks.map(kk=>ITEMS[kk].name+(cnt[kk]>1?" ×"+cnt[kk]:"")).join(", "):"leer");
     }
-    if(game.difficulty==='hard' && (RECIPES[b.kind]||b.kind==='electrolyseur'||b.kind==='chemfab')){
+    if(isAdv() && (RECIPES[b.kind]||b.kind==='electrolyseur'||b.kind==='chemfab')){
       const lvl=b.speedLvl||1;
       extra+="\nSpeed: Stufe "+lvl+"/3 (×"+MACHINE_MULT[lvl-1].toFixed(2)+")";
       if(tool==='upgrade') extra+= lvl>=3 ? "\n⬆️ max. Stufe erreicht" : "\n⬆️ Upgrade → Stufe "+(lvl+1)+": "+Math.round(DEF[b.kind].cost*(lvl===1?0.75:1.5))+" 💵";
@@ -1026,7 +1133,9 @@ function updateTip(e){
 // Warum braucht man dieses Gebäude?
 const WHY = {
   belt:"Transportiert feste Rohstoffe und Zwischenprodukte (Sand … Chip) zwischen Gebäuden. Braucht keinen Strom.",
+  cross:"Kreuzung für Förderbänder: zwei Bänder können sich überschneiden, ohne sich zu vermischen — jedes Item läuft geradeaus in seiner Richtung weiter.",
   pipe:"Transportiert Flüssigkeiten & Gase (Wasser, H₂, O₂) zwischen Gebäuden — analog zum Förderband. Braucht keinen Strom.",
+  pipecross:"Kreuzung für Rohre: zwei Leitungen kreuzen sich (eine führt als Brücke darüber), ohne dass sich die Fluide vermischen — alles fließt geradeaus weiter.",
   cable:"Verteilt Strom. JEDES Gebäude, das Strom braucht, muss per Kabel mit einem Kraftwerk verbunden sein — Bänder & Rohre nicht.",
   gastank:"Großer Puffer für Gase (H₂ & O₂). Nimmt überschüssiges Gas auf, damit der Elektrolyseur weiterläuft, auch wenn ein Gas gerade nicht gebraucht wird — und gibt es bei Bedarf wieder ab. Braucht keinen Strom, nur 1 Feld.",
   sandmine:"Liefert Quarzsand — den Grundrohstoff der gesamten Chip-Produktion.",
@@ -1043,9 +1152,9 @@ const WHY = {
   fab:"Belichtet, ätzt und dotiert die Wafer zu fertigen Schaltungen.",
   packaging:"Verpackt den Chip schützend in ein Gehäuse.",
   seller:"Verkauft fertige Chips und bringt dir Geld.",
-  chemfab:"Nur im schweren Modus: Verarbeitet die chemischen Rohstoff-Vorkommen (per ➤ Förderband zugeführt) und füllt damit die Vorräte (N₂, Fluor, Photoresist, Bor, Phosphor, Arsen, Kupfer, Epoxidharz, Argon) wieder auf — diese sind im schweren Modus nicht kaufbar. Belegt 8×3 Felder, braucht 200 ⚡.",
+  chemfab:"Ab Modus „mittel“: Verarbeitet die chemischen Rohstoff-Vorkommen (per ➤ Förderband zugeführt) und füllt damit die nicht kaufbaren Vorräte (N₂, Fluor, Photoresist, Bor, Phosphor, Arsen, Kupfer, Epoxidharz, Argon — im Modus „schwer“ auch HCl) wieder auf. Belegt 8×3 Felder, braucht 200 ⚡.",
   delete:"Reißt Gebäude ab (50 % der Kosten zurück).",
-  upgrade:"Nur im schweren Modus: Werkzeug wählen und eine Maschine anklicken, um sie einzeln auf mehr Geschwindigkeit zu upgraden (bis Stufe 3). Kosten richten sich nach der Maschine.",
+  upgrade:"Ab Modus „mittel“: Werkzeug wählen und eine Maschine anklicken, um sie einzeln auf mehr Geschwindigkeit zu upgraden (bis Stufe 3). Kosten richten sich nach der Maschine.",
 };
 function infoHTML(kind){
   const d=DEF[kind]||TOOLMETA[kind]||{name:kind,ic:"?",cost:0};
@@ -1092,7 +1201,7 @@ function buildSupplies(){
   const list=document.getElementById('sup-list'); list.innerHTML="";
   for(const key in SUP){ const s=SUP[key];
     const el=document.createElement('div'); el.className="sup"; el.id="sup-"+key;
-    const chem = game.difficulty==="hard" && key!=="hcl"; // nicht kaufbar → kommt aus der Chemiefabrik
+    const chem = isAdv() && (key!=="hcl" || isHard()); // nicht kaufbar → kommt aus der Chemiefabrik (bzw. 📜 Vertrag)
     el.innerHTML=`<span class="nm">${chem?'🧪 ':''}${s.name}</span><span class="st">0</span>`; list.appendChild(el);
   }
 }
@@ -1129,15 +1238,16 @@ function labelHTML(b){
   else if(b.kind==="nuclear") out+=`<br><span class="p">+${d.powerGen} ⚡ Strom (24/7)</span>`;
   else if(b.kind==="electrolyseur") out+=`<br><span class="p">→ H₂ (vorne) · O₂ (hinten)</span><br><span class="u">braucht Wasser · -${d.powerUse} ⚡</span>`;
   else if(b.kind==="gastank") out+=`<br><span class="p">Gas-Puffer</span><br><span class="u">H₂ ${Math.round(b.buf.h2||0)} · O₂ ${Math.round(b.buf.o2||0)} / ${gasCap()}</span>`;
-  else if(b.kind==="chemfab"){ const tot=CHEM_KEYS.reduce((s,kk)=>s+(b.buf[kk]||0),0); out+=`<br><span class="p">füllt Vorräte auf</span><br><span class="u">Puffer ${tot} · -${d.powerUse} ⚡</span>`; }
-  else if(SOURCES[b.kind]) out+=`<br><span class="p">→ ${ITEMS[SOURCES[b.kind].out].name}</span><br><span class="u">-${d.powerUse} ⚡</span>`;
+  else if(b.kind==="chemfab"){ const tot=chemKeys().reduce((s,kk)=>s+(b.buf[kk]||0),0); out+=`<br><span class="p">füllt Vorräte auf</span><br><span class="u">Puffer ${tot} · -${d.powerUse} ⚡</span>`; }
+  else if(SOURCES[b.kind]){ out+=`<br><span class="p">→ ${ITEMS[SOURCES[b.kind].out].name}</span><br><span class="u">-${d.powerUse} ⚡</span>`;
+    if(b.left!=null&&isFinite(b.left)) out+= b.left>0?`<br><span class="u">Vorkommen: ${Math.max(0,Math.ceil(b.left))} übrig</span>`:`<br><span class="w">⛔ erschöpft</span>`; }
   else if(RECIPES[b.kind]){ const r=RECIPES[b.kind];
     out+=`<br><span class="p">→ ${ITEMS[r.out].name}${r.outCount?(" ×"+r.outCount):""}</span>`;
     if(d.powerUse) out+=`<br><span class="u">-${d.powerUse} ⚡</span>`;
   }
   else if(b.kind==="seller") out+=`<br><span class="p">Chip → +${chipPrice()} 💵</span>`;
   else if(b.kind==="battery"){ const c=capOf(b), p=Math.round(b.stored/c*100); out+=`<br><span class="p">🔋 geladen ${p}%</span><br><span class="u">Kapazität ${Math.round(c)} ⚡${batMult()>1?" (Lv "+(game.tech.battery)+")":""}</span>`; }
-  if(game.difficulty==='hard' && (RECIPES[b.kind]||b.kind==='electrolyseur'||b.kind==='chemfab') && (b.speedLvl||1)>1) out+=`<br><span class="p">⬆️ Speed Stufe ${b.speedLvl}/3</span>`;
+  if(isAdv() && (RECIPES[b.kind]||b.kind==='electrolyseur'||b.kind==='chemfab') && (b.speedLvl||1)>1) out+=`<br><span class="p">⬆️ Speed Stufe ${b.speedLvl}/3</span>`;
   const st=statusOf(b)[0];
   if(st==="nicht verbunden") out+=`<br><span class="w">🔌 nicht ans Stromnetz angeschlossen</span>`;
   else if(st==="kein Strom"){ const def=Math.max(0,game.powerDemand-game.powerGen); out+=`<br><span class="w">⚠ Strom fehlt${def?` −${def} ⚡`:""}</span>`; }
@@ -1171,10 +1281,14 @@ function nextTip(){
     ["siemens","⚗️ <b>Siemens-Reaktor</b> — braucht Rohsilizium (Band) UND Wasserstoff (🚰 Rohr vom Elektrolyseur)"],["crystal","💎 <b>Kristallzieher</b> (→ Barren)"],
     ["waferplant","🥞 <b>Wafer-Werk</b> — braucht den Barren UND Wasser (🚰 Rohr von einer Pumpe)"],["fab","🔬 <b>Frontend-Fab</b> — braucht Wafer, Wasser und Sauerstoff (🚰 Rohre)"],["packaging","📦 <b>Packaging</b> (→ Chip)"]];
   for(const [kk,desc] of chain){ if(cnt(kk)===0) return "Baue als Nächstes: "+desc+"."; }
-  if(game.difficulty==="hard"){
+  if(isAdv()){
     if(cnt("chemfab")===0) return "🧪 Baue eine <b>Chemiefabrik</b> (8×3) und leite die chemischen Vorkommen per ➤ Band hinein — sie füllt die nicht kaufbaren Vorräte (N₂, Fluor, Bor …) wieder auf.";
     const fabWait=buildings.find(b=>b.kind==="fab" && statusOf(b)[0].startsWith("Vorrat leer"));
-    if(fabWait) return "🧪 Deiner <b>Frontend-Fab</b> fehlen Vorräte — verbinde mehr Chemie-Vorkommen per ➤ Band mit der <b>Chemiefabrik</b>.";
+    if(fabWait) return "🧪 Deiner <b>Frontend-Fab</b> fehlen Vorräte — verbinde mehr Chemie-Vorkommen per ➤ Band mit der <b>Chemiefabrik</b>"+(isHard()?" oder schließe im 🤝 Handelsplatz einen 📜 <b>Liefervertrag</b> ab":"")+".";
+    if(isHard()){
+      const dead=buildings.find(b=>SOURCES[b.kind] && b.left!=null && b.left<=0);
+      if(dead) return "⛔ Ein <b>"+DEF[dead.kind].name+"</b> ist erschöpft — Vorkommen sind im Modus „schwer“ endlich. Sichere den Nachschub über 📜 <b>Lieferverträge</b> im 🤝 Handelsplatz.";
+    }
   }
   if(cnt("electrolyseur")===0) return "💠 Wasserstoff & Sauerstoff gibt es nicht mehr im Vorrat! Baue einen <b>Elektrolyseur</b>, leite per 🚰 Rohr Wasser hinein — er gibt H₂ und O₂ in Rohre ab.";
   if(cnt("seller")===0) return "🚚 Baue einen <b>Versand</b> und leite die Chips dorthin — so verdienst du Geld.";
@@ -1197,7 +1311,7 @@ const GOALS={
     {id:'ingot', label:'Erzeuge deinen ersten Kristall-Barren',done:()=>(game.made.ingot||0)>0},
     {id:'ship',  label:'Versende deinen ersten Chip',          done:()=>game.chips>=1},
   ],
-  hard:[
+  medium:[
     {id:'sup',    label:'Fülle alle Vorräte in der Chemiefabrik auf', prog:()=>CHEM_KEYS.filter(kk=>SUP[kk].stock>0).length+'/'+CHEM_KEYS.length, done:()=>CHEM_KEYS.every(kk=>SUP[kk].stock>0)},
     {id:'chip5',  label:'Stelle 5 Chips her',           prog:()=>Math.min(game.made.chip||0,5)+'/5',     done:()=>(game.made.chip||0)>=5},
     {id:'rate',   label:'Erreiche 3000 $/min',          prog:()=>Math.round(currentRate())+'/3000',      done:()=>currentRate()>=3000},
@@ -1205,6 +1319,16 @@ const GOALS={
     {id:'gen',    label:'Erreiche 2000 kWh Stromerzeugung', prog:()=>Math.round(game.powerGen)+'/2000',   done:()=>game.powerGen>=2000},
     {id:'cap',    label:'Erreiche 1000 kW Energiespeicher',  prog:()=>Math.round(game.powerCap)+'/1000',  done:()=>game.powerCap>=1000},
     {id:'chip100',label:'Stelle 100 Chips her',         prog:()=>Math.min(game.made.chip||0,100)+'/100',  done:()=>(game.made.chip||0)>=100},
+  ],
+  hard:[
+    {id:'sup10',  label:'Fülle alle 10 Vorräte (inkl. HCl) in der Chemiefabrik auf', prog:()=>chemKeys().filter(kk=>SUP[kk].stock>0).length+'/'+chemKeys().length, done:()=>chemKeys().every(kk=>SUP[kk].stock>0)},
+    {id:'chip10', label:'Stelle 10 Chips her',          prog:()=>Math.min(game.made.chip||0,10)+'/10',    done:()=>(game.made.chip||0)>=10},
+    {id:'contract',label:'Schließe einen 📜 Liefervertrag ab (Handelsplatz)', done:()=>Object.keys(game.contracts||{}).length>0},
+    {id:'rate',   label:'Erreiche 6000 $/min',          prog:()=>Math.round(currentRate())+'/6000',       done:()=>currentRate()>=6000},
+    {id:'money',  label:'Erreiche 150.000 $ Kontostand',prog:()=>Math.floor(game.money)+'/150000',        done:()=>game.money>=150000},
+    {id:'gen',    label:'Erreiche 4000 kWh Stromerzeugung', prog:()=>Math.round(game.powerGen)+'/4000',   done:()=>game.powerGen>=4000},
+    {id:'cap',    label:'Erreiche 2500 kW Energiespeicher',  prog:()=>Math.round(game.powerCap)+'/2500',  done:()=>game.powerCap>=2500},
+    {id:'chip500',label:'Stelle 500 Chips her',         prog:()=>Math.min(game.made.chip||0,500)+'/500',  done:()=>(game.made.chip||0)>=500},
   ]
 };
 function goalList(){ return GOALS[game.difficulty]||GOALS.easy; }
@@ -1214,7 +1338,7 @@ function buildGoals(){ const el=document.getElementById('goal-list'); el.innerHT
 }
 function updateGoals(){ for(const g of goalList()){ if(!game.goalsDone[g.id] && g.done()){ game.goalsDone[g.id]=true;
   toast("🎯 Ziel erreicht: "+g.label,0x46d97e);
-  if(goalList().every(x=>game.goalsDone[x.id])) toast(game.difficulty==='hard'?"🏆 Alle Ziele erreicht — Meister der Halbleiterfabrik!":"🏆 Geschafft! Alle Ziele erreicht.",0xffd24a);
+  if(goalList().every(x=>game.goalsDone[x.id])) toast(isHard()?"🏆 Alle Ziele erreicht — Großmeister der Mars-Halbleiterfabrik!":isAdv()?"🏆 Alle Ziele erreicht — Meister der Halbleiterfabrik!":"🏆 Geschafft! Alle Ziele erreicht.",0xffd24a);
 } } }
 function renderGoals(){ for(const g of goalList()){ const d=document.getElementById("goal-"+g.id); if(!d) continue;
   const done=!!game.goalsDone[g.id]; d.classList.toggle('done',done);
@@ -1234,7 +1358,7 @@ function renderTech(){ const grid=document.getElementById('tt-grid'); grid.inner
   }
   grid.querySelectorAll('.tt-buy[data-k]').forEach(btn=>btn.onclick=()=>buyTech(btn.dataset.k));
 }
-// Nur die Kaufbarkeit (disabled) je Frame aktualisieren — KEIN DOM-Neuaufbau, sonst „verschluckt" der Re-Render den Klick.
+// Nur die Kaufbarkeit (disabled) je Frame aktualisieren — KEIN DOM-Neuaufbau, sonst „verschluckt“ der Re-Render den Klick.
 function refreshTechButtons(){ document.querySelectorAll('#tt-grid .tt-buy[data-k]').forEach(btn=>{
   const key=btn.dataset.k, lvl=game.tech[key]||1; if(lvl>=3) return; btn.disabled = game.money<TECH_COST[key][lvl-1]; }); }
 function buyTech(key){ const lvl=game.tech[key]||1; if(lvl>=3) return; const cost=TECH_COST[key][lvl-1];
@@ -1284,21 +1408,37 @@ function marketBuy(key){ const cost=buyPrice(key)*MKT_BATCH; if(game.money<cost)
 function marketSell(key){ if(SUP[key].stock<MKT_BATCH){ toast("Nicht genug Vorrat.",0xffb454); return; }
   const rev=sellPrice(key)*MKT_BATCH; game.money+=rev; SUP[key].stock-=MKT_BATCH;
   game.market.sat[key]=Math.min(SAT_MAX,(game.market.sat[key]||0)+SELL_SAT); refreshMarket(); }
+// 📜 Liefervertrag (nur „schwer“): Abschlussgebühr, dann CONTRACT_RATE Einheiten/min zu price×CONTRACT_PRICE_MULT.
+function toggleContract(key){
+  if(game.contracts[key]){ delete game.contracts[key]; toast("📜 Liefervertrag für "+SUP[key].name+" gekündigt.",0xffb454); }
+  else{ if(game.money<CONTRACT_FEE){ toast("Zu wenig Geld für die Vertragsgebühr ("+CONTRACT_FEE+" 💵).",0xff5d6c); return; }
+    game.money-=CONTRACT_FEE; game.contracts[key]=true;
+    toast("📜 Liefervertrag: +"+CONTRACT_RATE+" "+SUP[key].name+"/min gegen laufende Kosten.",0x34e0c0); }
+  refreshMarket();
+}
 function buildMarket(){ const body=document.getElementById('market-body'); body.innerHTML="";
+  if(isHard()){ const hint=document.createElement('p'); hint.className="tt-sub";
+    hint.textContent="📜 Liefervertrag: "+CONTRACT_FEE+" 💵 Gebühr, dann automatisch "+CONTRACT_RATE+" Einheiten/min — laufende Kosten: Preis ×"+CONTRACT_PRICE_MULT+". Jederzeit kündbar.";
+    body.appendChild(hint); }
   for(const key in SUP){ const row=document.createElement('div'); row.className="mk-row"; row.dataset.k=key;
     row.innerHTML=`<span class="nm">${SUP[key].name}</span><span class="stk">—</span>`
-      +`<button class="mk-btn mk-buy" data-act="buy">—</button><button class="mk-btn mk-sell" data-act="sell">—</button>`;
+      +`<button class="mk-btn mk-buy" data-act="buy">—</button><button class="mk-btn mk-sell" data-act="sell">—</button>`
+      +(isHard()?`<button class="mk-btn mk-con" data-act="con">—</button>`:``);
+    if(isHard()) row.style.gridTemplateColumns="1.4fr .6fr .9fr .9fr 1.1fr";
     body.appendChild(row);
   }
   body.querySelectorAll('.mk-btn').forEach(btn=>{ const key=btn.closest('.mk-row').dataset.k;
-    btn.onclick=()=> btn.dataset.act==='buy'?marketBuy(key):marketSell(key); });
+    btn.onclick=()=> btn.dataset.act==='buy'?marketBuy(key):btn.dataset.act==='sell'?marketSell(key):toggleContract(key); });
   refreshMarket();
 }
 function refreshMarket(){ document.querySelectorAll('#market-body .mk-row').forEach(row=>{ const key=row.dataset.k;
   row.querySelector('.stk').textContent=Math.floor(SUP[key].stock);
-  const buy=row.querySelector('.mk-buy'), sell=row.querySelector('.mk-sell');
+  const buy=row.querySelector('.mk-buy'), sell=row.querySelector('.mk-sell'), con=row.querySelector('.mk-con');
   buy.textContent="Kauf "+MKT_BATCH+"× · "+(buyPrice(key)*MKT_BATCH)+" 💵"; buy.disabled=game.money<buyPrice(key)*MKT_BATCH;
   sell.textContent="Verkauf "+MKT_BATCH+"× · "+(sellPrice(key)*MKT_BATCH)+" 💵"; sell.disabled=SUP[key].stock<MKT_BATCH;
+  if(con){ const on=!!game.contracts[key];
+    con.textContent=on?"📜 Vertrag kündigen":"📜 Vertrag · "+CONTRACT_FEE+" 💵";
+    con.className="mk-btn "+(on?"mk-sell":"mk-buy")+" mk-con"; con.disabled=!on&&game.money<CONTRACT_FEE; }
 }); }
 
 /* ===================== LOOP ===================== */
@@ -1313,10 +1453,16 @@ function simTick(dt){
   autoBuy(dt);
   statTick(dt);
 }
-// Statistik-Sampling + Markt-Sättigung-Abklingen (nur „schwer")
+// Statistik-Sampling + Markt-Sättigung-Abklingen (ab „mittel“) + Lieferverträge (nur „schwer“)
 function statTick(dt){
-  if(game.difficulty!=='hard') return;
+  if(!isAdv()) return;
   game.simTime+=dt;
+  if(isHard()){ // 📜 Lieferverträge: laufende Lieferung gegen laufende Kosten (pausiert bei Geldmangel)
+    for(const key in game.contracts){ if(!SUP[key]) continue;
+      const units=CONTRACT_RATE*dt/60, cost=units*SUP[key].price*CONTRACT_PRICE_MULT;
+      if(game.money>=cost){ game.money-=cost; SUP[key].stock+=units; }
+    }
+  }
   for(const kk in game.market.sat){ game.market.sat[kk]*=Math.pow(0.97,dt); if(game.market.sat[kk]<0.01) delete game.market.sat[kk]; } // Preise erholen sich langsam
   game.stats.acc+=dt; if(game.stats.acc<1) return; const span=game.stats.acc; game.stats.acc=0;
   const s=game.stats;
@@ -1357,33 +1503,34 @@ document.getElementById('chaintext').innerHTML =
  `Fahre mit der Maus über die <b>Bauleiste</b>, um zu sehen, was jedes Gebäude braucht und herstellt.\n`+
  `Taste <b>T</b> gibt dir jederzeit einen Tipp, was als Nächstes sinnvoll ist.`;
 /* ===================== ROHSTOFFE ZUFÄLLIG VERTEILEN ===================== */
-function addPatch(kind,x,z){ // Boden-Markierung für das Vorkommen
+function addPatch(kind,x,z){ // Boden-Markierung für das Vorkommen (Quellen sind 2×2 → Mitte + größerer Kreis)
   const col = kind==="sandmine"?0xc4a661 : kind==="coalmine"?0x1c1c1c : kind==="pump"?0x2f7fb0 : (DEF[kind]?DEF[kind].col:0x888888);
-  const m=new THREE.Mesh(new THREE.CircleGeometry(.66,22), new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.4}));
-  m.rotation.x=-Math.PI/2; const [wx,wz]=tileToWorld(x,z); m.position.set(wx,.02,wz); scene.add(m); patches.push(m);
+  const m=new THREE.Mesh(new THREE.CircleGeometry(1.35,26), new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.35}));
+  m.rotation.x=-Math.PI/2; const [wx,wz]=tileToWorld(x,z); m.position.set(wx+.5*S,.02,wz+.5*S); scene.add(m); patches.push(m);
 }
 function scatterResources(){
-  const hard = game.difficulty==='hard';
-  // „einfach" unverändert; „schwer": 4× Feld → mehr Basisquellen + die Chemie-Vorkommen (je 3, gleichmäßig verteilt)
-  const want = hard
+  const diff=game.difficulty;
+  // „einfach“: Basisquellen · „mittel“: + 9 Chemie-Vorkommen · „schwer“: + HCl, alle Vorkommen ENDLICH
+  const want = diff==='hard'
+    ? [["sandmine",10],["coalmine",8],["pump",8], ...chemKeys().map(kk=>['dep_'+kk,3])]
+    : diff==='medium'
     ? [["sandmine",8],["coalmine",6],["pump",6], ...CHEM_KEYS.map(kk=>['dep_'+kk,3])]
-    : [["sandmine",5],["coalmine",3],["pump",3]]; // 10% mehr Quellen (11 statt 10)
-  const placed=[];                          // alle Quellen (Mindestabstand zueinander)
-  const byType={};                          // je Typ (größerer Abstand → ausgeglichene Verteilung)
-  const minDist = hard?4:5;                 // Abstand zwischen beliebigen Quellen
-  const sameDist = hard?11:5;               // Abstand zwischen gleichartigen Quellen
+    : [["sandmine",5],["coalmine",3],["pump",3]];
+  const placed=[];                                  // alle Quellen (Mindestabstand zueinander)
+  const byType={};                                  // je Typ (größerer Abstand → ausgeglichene Verteilung)
+  const minDist  = diff==='easy'?6:5;               // Abstand zwischen beliebigen Quellen (2×2!)
+  const sameDist = diff==='easy'?7:12;              // Abstand zwischen gleichartigen Quellen
   for(const [kind,num] of want){
     byType[kind]=byType[kind]||[];
     let made=0, tries=0;
-    while(made<num && tries<2000){ tries++;
-      const x=2+Math.floor(Math.random()*(N-4)), z=2+Math.floor(Math.random()*(N-4));
-      if(grid_.get(k(x,z))) continue;
+    while(made<num && tries<2500){ tries++;
+      const x=2+Math.floor(Math.random()*(N-5)), z=2+Math.floor(Math.random()*(N-5)); // 2×2-Fußabdruck
       if(placed.some(p=>Math.abs(p[0]-x)+Math.abs(p[1]-z)<minDist)) continue;
       if(byType[kind].some(p=>Math.abs(p[0]-x)+Math.abs(p[1]-z)<sameDist)) continue;
-      let dir = x<N/2 ? 1 : 3; // Ausgaberichtung Richtung Kartenmitte
-      if(SOURCES[kind]){ const fx=x+DIRS[dir][0], fz=z+DIRS[dir][1]; if(!inBounds(fx,fz)||grid_.get(k(fx,fz))) continue; }
-      placeDir=dir;
-      if(place(kind,x,z,true)){ addPatch(kind,x,z); placed.push([x,z]); byType[kind].push([x,z]); made++; }
+      placeDir = x<N/2 ? 1 : 3;
+      if(place(kind,x,z,true)){ addPatch(kind,x,z); placed.push([x,z]); byType[kind].push([x,z]); made++;
+        if(diff==='hard'){ const b=grid_.get(k(x,z)); if(b) b.left=DEPOSIT_AMOUNT(kind); } // endliche Vorkommen
+      }
     }
   }
   placeDir=1; // zurücksetzen
@@ -1392,12 +1539,12 @@ function scatterResources(){
 /* ===================== SPEICHERN / LADEN ===================== */
 function saveGame(){
   try{
-    const data={ v:1, money:game.money, chips:game.chips, timeOfDay:game.timeOfDay, difficulty:game.difficulty,
-      made:game.made, goalsDone:game.goalsDone, tech:game.tech,
+    const data={ v:2, money:game.money, chips:game.chips, timeOfDay:game.timeOfDay, difficulty:game.difficulty,
+      made:game.made, goalsDone:game.goalsDone, tech:game.tech, contracts:game.contracts,
       autobuy:document.getElementById('autobuy').checked,
       sup:Object.fromEntries(Object.keys(SUP).map(kk=>[kk,SUP[kk].stock])),
-      buildings:buildings.map(b=>({kind:b.kind,x:b.x,z:b.z,dir:b.dir,fixed:!!b.fixed,buf:b.buf,outBuf:b.outBuf,outType:b.outType,stored:b.stored,h2Buf:b.h2Buf||0,o2Buf:b.o2Buf||0,t:b.t,speedLvl:b.speedLvl||1})),
-      items:items.filter(i=>!i._dead).map(i=>({type:i.type,x:i.x,z:i.z,prog:i.prog})) };
+      buildings:buildings.map(b=>({kind:b.kind,x:b.x,z:b.z,dir:b.dir,fixed:!!b.fixed,buf:b.buf,outBuf:b.outBuf,outType:b.outType,stored:b.stored,h2Buf:b.h2Buf||0,o2Buf:b.o2Buf||0,t:b.t,speedLvl:b.speedLvl||1,left:(b.left!=null&&isFinite(b.left))?b.left:undefined})),
+      items:items.filter(i=>!i._dead).map(i=>({type:i.type,x:i.x,z:i.z,prog:i.prog,dir:i.dir})) };
     const blob=new Blob([JSON.stringify(data)],{type:"application/json"});
     const url=URL.createObjectURL(blob); const a=document.createElement('a');
     const ts=new Date().toISOString().slice(0,16).replace(/[:T]/g,"-");
@@ -1414,26 +1561,29 @@ function clearFactory(){
 }
 function loadGame(d){
   if(!d||!Array.isArray(d.buildings)) return false;
-  game.difficulty=d.difficulty||'easy';
-  applyDifficulty(game.difficulty);   // Feldgröße + Hotbar + Vorräte-Panel passend zum Modus (vor dem Platzieren!)
+  let diff=d.difficulty||'easy';
+  if(diff==='hard' && (d.v||1)<2) diff='medium'; // alte Spielstände: „schwer“ (v1) ist jetzt „mittel“
+  applyDifficulty(diff);   // Feldgröße + Hotbar + Vorräte-Panel passend zum Modus (vor dem Platzieren!)
   clearFactory();
   for(const sb of d.buildings){ placeDir=(sb.dir==null?1:sb.dir); // 0 (Nord) NICHT als falsy behandeln!
     if(place(sb.kind,sb.x,sb.z,true)){ const nb=grid_.get(k(sb.x,sb.z)); if(nb){
       nb.buf=sb.buf||{}; nb.outBuf=sb.outBuf||0; nb.outType=sb.outType||null; nb.stored=sb.stored||0;
       nb.h2Buf=sb.h2Buf||0; nb.o2Buf=sb.o2Buf||0; nb.t=sb.t||0; nb.fixed=!!sb.fixed; nb.speedLvl=sb.speedLvl||1;
+      if(sb.left!=null) nb.left=sb.left;
       if(nb.fixed && SOURCES[nb.kind]) addPatch(nb.kind,nb.x,nb.z);
     } } }
   placeDir=1;
-  for(const si of (d.items||[])){ const t=grid_.get(k(si.x,si.z)); if(t&&(t.kind==="belt"||t.kind==="pipe")) makeItem(si.type,si.x,si.z,si.prog); }
-  game.money=(d.money!=null?d.money:game.money); game.chips=d.chips||0; game.timeOfDay=d.timeOfDay||0.33; game.speed=1; game.soldWindow=[]; game.difficulty=d.difficulty||'easy';
-  game.made=d.made||{}; game.goalsDone=d.goalsDone||{}; game.tech=Object.assign({solar:1,battery:1,gastank:1,belt:1,pipe:1,chip:1}, d.tech||{}); resetStatsMarket(); buildGoals();
+  for(const si of (d.items||[])){ const t=grid_.get(k(si.x,si.z)); if(t&&isCarrier(t)) makeItem(si.type,si.x,si.z,si.prog,si.dir); }
+  game.money=(d.money!=null?d.money:game.money); game.chips=d.chips||0; game.timeOfDay=d.timeOfDay||0.33; game.speed=1; game.soldWindow=[];
+  game.made=d.made||{}; game.goalsDone=d.goalsDone||{}; game.tech=Object.assign({solar:1,battery:1,gastank:1,belt:1,pipe:1,chip:1}, d.tech||{}); resetStatsMarket();
+  game.contracts=d.contracts||{}; buildGoals();
   for(const kk in SUP){ if(d.sup && d.sup[kk]!=null) SUP[kk].stock=d.sup[kk]; }
   const ab=document.getElementById('autobuy'); if(ab && d.autobuy!=null) ab.checked=d.autobuy;
   document.querySelectorAll('#speedctl .spd').forEach(e=>e.classList.toggle('sel', e.dataset.s==='1'));
   setModeTitle();
   document.getElementById('intro').classList.add('hide'); started=true;
   if(typeof musicOn!=="undefined" && musicOn) playTrack();
-  toast("📂 Spielstand geladen ("+(game.difficulty==='hard'?"Schwer":"Einfach")+").",0x34e0c0);
+  toast("📂 Spielstand geladen ("+(game.difficulty==='hard'?"Schwer":game.difficulty==='medium'?"Mittel":"Einfach")+").",0x34e0c0);
   return true;
 }
 
@@ -1455,29 +1605,34 @@ document.getElementById('save-btn').onclick=()=>saveGame();
 document.getElementById('load-btn').onclick=()=>document.getElementById('load-file').click();
 document.getElementById('load-file').onchange=e=>{ const f=e.target.files[0]; e.target.value=""; if(!f) return;
   const r=new FileReader(); r.onload=()=>{ try{ if(!loadGame(JSON.parse(r.result))) toast("Ungültige Spielstand-Datei.",0xff5d6c); }catch(err){ toast("Ungültige Spielstand-Datei.",0xff5d6c); } }; r.readAsText(f); };
-function setModeTitle(){ document.getElementById('title').textContent="CHIPTORIO · "+(game.difficulty==='hard'?"SCHWER":"EINFACH"); }
+function setModeTitle(){ document.getElementById('title').textContent="CHIPTORIO · "+(game.difficulty==='hard'?"SCHWER":game.difficulty==='medium'?"MITTEL":"EINFACH"); }
 // Modus-Setup (Feldgröße, Hotbar, Vorräte-Panel) — KEINE Zustands-/Geld-Änderung (das macht startFactory bzw. loadGame).
 function applyDifficulty(diff){
   game.difficulty=diff;
-  setFieldSize(diff==='hard'?46:23);
-  if(diff==='hard'){ camera.position.set(0,34,32); controls.target.set(0,0,0); }
+  setFieldSize(MODE_FIELD[diff]||MODE_FIELD.easy);
+  if(diff==='medium'){ camera.position.set(0,36,34); controls.target.set(0,0,0); }
+  else if(diff==='hard'){ camera.position.set(0,46,44); controls.target.set(0,0,0); }
   buildHotbar(); buildSupplies(); buildGoals(); selectTool(toolList().includes(tool)?tool:"belt"); setModeTitle();
-  const hardOnly=diff!=='hard';
-  for(const id of ['tech-btn','stats-btn','market-btn']) document.getElementById(id).classList.toggle('hide', hardOnly);
+  const basic=!isAdv();
+  for(const id of ['tech-btn','stats-btn','market-btn']) document.getElementById(id).classList.toggle('hide', basic);
   for(const id of ['techtree','stats','market']) document.getElementById(id).classList.add('hide');
 }
-function resetSupplies(diff){ for(const kk in SUP){ SUP[kk].stock = (diff==='hard' && kk!=='hcl') ? 0 : 80; } }
+function resetSupplies(diff){ for(const kk in SUP){
+  SUP[kk].stock = diff==='hard' ? 0 : (diff==='medium' && kk!=='hcl') ? 0 : 80; } }
 function startFactory(diff){
   applyDifficulty(diff);
-  game.money = diff==='hard'?HARD_MONEY:5500; game.chips=0; game.soldWindow=[]; resetSupplies(diff);
+  game.money = MODE_MONEY[diff]||MODE_MONEY.easy; game.chips=0; game.soldWindow=[]; resetSupplies(diff);
   game.made={}; game.goalsDone={}; game.tech={solar:1,battery:1,gastank:1,belt:1,pipe:1,chip:1}; resetStatsMarket();
-  if(diff==='hard'){ clearFactory(); scatterResources(); } // schweres Feld neu erzeugen; „einfach" nutzt die beim Laden erzeugte Karte
+  if(diff!=='easy'){ clearFactory(); scatterResources(); } // großes Feld neu erzeugen; „einfach“ nutzt die beim Laden erzeugte Karte
   document.getElementById('intro').classList.add('hide'); started=true; if(musicOn) playTrack();
   toast(diff==='hard'
-    ? "🔴 Schwer — nur HCl kaufbar. Leite die Chemie-Vorkommen (inkl. Argon) per ➤ Band in die 🧪 Chemiefabrik. Feld 4× so groß. Taste T = Tipp."
+    ? "🔴 Schwer — NICHTS ist kaufbar, alle Vorkommen (inkl. HCl) sind endlich! Baue sie ab oder sichere 📜 Lieferverträge im 🤝 Handelsplatz. Taste T = Tipp."
+    : diff==='medium'
+    ? "🟠 Mittel — nur HCl kaufbar. Leite die Chemie-Vorkommen (inkl. Argon) per ➤ Band in die 🧪 Chemiefabrik. Taste T = Tipp."
     : "🟢 Einfach — Sand, Kohle & Wasser liegen auf der Karte. Baue ☀️ Solar, verlege 🔌 Kabel & ➤ Bänder. Taste T = Tipp.",0x34e0c0);
 }
 document.getElementById('start-easy').onclick=()=>startFactory('easy');
+document.getElementById('start-medium').onclick=()=>startFactory('medium');
 document.getElementById('start-hard').onclick=()=>startFactory('hard');
 document.getElementById('tech-btn').onclick=()=>{ renderTech(); document.getElementById('techtree').classList.remove('hide'); };
 document.getElementById('tt-close').onclick=()=>document.getElementById('techtree').classList.add('hide');
