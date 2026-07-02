@@ -170,7 +170,7 @@
     <button id="load-btn" title="Spielstand-Datei laden">📂 Laden</button>
     <input type="file" id="load-file" accept="application/json,.json" style="display:none">
     <button id="music-btn" class="ghost" title="Musik an/aus">🔊</button>
-    <button id="tech-btn" class="hide" title="Tech-Tree (ab Modus „mittel“)">🔬 Tech-Tree</button>
+    <button id="tech-btn" class="hide" title="Forschung (ab Modus „mittel“)">🔬 Forschung</button>
     <button id="stats-btn" class="hide" title="Statistik (ab Modus „mittel“)">📊 Statistik</button>
     <button id="market-btn" class="hide" title="Handelsplatz (ab Modus „mittel“)">🤝 Handel</button>
     <span id="title">CHIPTORIO · FABRIK</span>
@@ -180,7 +180,7 @@
     <div class="stat"><span class="lbl">💵 /min</span><b id="s-rate">0</b></div>
     <div class="stat"><span class="lbl">🕒 ZEIT</span><b id="s-time">—</b></div>
     <div class="stat" id="speedctl"><span class="lbl">TEMPO</span>
-      <span class="spd sel" data-s="1">1×</span><span class="spd" data-s="3">3×</span><span class="spd" data-s="6">6×</span><span class="spd" data-s="10">10×</span></div>
+      <span class="spd" data-s="0">⏸</span><span class="spd sel" data-s="1">1×</span><span class="spd" data-s="3">3×</span><span class="spd" data-s="6">6×</span><span class="spd" data-s="10">10×</span></div>
   </div>
   <div id="hotbar"></div>
 </div>
@@ -197,8 +197,8 @@
 
 <div id="techtree" class="hide"><div class="tt-panel">
   <button class="tt-close" id="tt-close">✕ Schließen</button>
-  <h2>🔬 Tech-Tree</h2>
-  <p class="tt-sub">Globale Upgrades (ab Modus „mittel“). Einzelne Maschinen upgradest du mit dem ⬆️-Werkzeug per Klick.</p>
+  <h2>🔬 Forschung</h2>
+  <p class="tt-sub">Upgrades verbessern bestehende Technik · neue Technologien schalten Gebäude frei. Einzelne Maschinen upgradest du mit dem ⬆️-Werkzeug per Klick. (Ab Modus „mittel“.)</p>
   <div class="tt-grid" id="tt-grid"></div>
 </div></div>
 
@@ -264,6 +264,11 @@ const ITEMS = {
   wafer: {name:"Roh-Wafer", col:0x9fb3c9},
   pwafer:{name:"Struktur-Wafer", col:0xb58fd6},
   chip:  {name:"Chip", col:0xffd24a},
+  // Quantenchip-Kette (ab Forschung „Quantenchips“)
+  scond: {name:"Supraleiter", col:0x8fa8d8},
+  qubit: {name:"Qubit-Wafer", col:0xb06ae0},
+  cryo:  {name:"Kryostat", col:0xbfe8f0},
+  qchip: {name:"Quantenchip", col:0x66ffe0},
   // Flüssigkeiten/Gase — fließen durch ROHRE statt Förderbänder
   water: {name:"Wasser", col:0x3fa9e0, fluid:true},
   h2:    {name:"Wasserstoff (H₂)", col:0x9fe8ff, fluid:true},
@@ -311,6 +316,13 @@ const DEF = {
   fab:       {name:"Frontend-Fab", ic:"🔬", cost:460, col:0x8a4fa0, powerUse:22, size:[2,2], cat:"Maschine"},
   packaging: {name:"Packaging", ic:"📦", cost:280, col:0xb08030, powerUse:8, cat:"Maschine"},
   seller:    {name:"Versand", ic:"🚚", cost:100, col:0x3a9a5a, cat:"Logistik"},
+  // ---- per Forschung freigeschaltet ----
+  portal:    {name:"Portal", ic:"🌀", cost:800, col:0x7a4ae0, powerUse:15, cat:"Logistik"},           // Forschung 'portal'
+  fusion:    {name:"Fusionsreaktor", ic:"🔆", cost:5000, col:0x4a7ae0, powerGen:800, size:[3,3], cat:"Versorgung"}, // Forschung 'fusion' (4× AKW)
+  scondworks:{name:"Supraleiter-Werk", ic:"🧲", cost:900, col:0x35507a, powerUse:30, cat:"Maschine"},  // Forschung 'quantum'
+  qubitfab:  {name:"Qubit-Fab", ic:"🔮", cost:1400, col:0x3a2a5a, powerUse:40, size:[2,2], cat:"Maschine"},
+  cryoworks: {name:"Kryostat-Werk", ic:"❄️", cost:1100, col:0xe8eef4, powerUse:35, cat:"Maschine"},
+  qfab:      {name:"Quantenchip-Fabrik", ic:"⚛️", cost:3000, col:0x1e2a45, powerUse:120, size:[3,3], cat:"Maschine"},
 };
 
 // Quellen (kein Input). Pumpe fördert Wasser in ROHRE.
@@ -340,7 +352,7 @@ for(const kk of [...CHEM_KEYS,'hcl']){ const m=CHEM_META[kk];
 DEF.chemfab={name:"Chemiefabrik", ic:"🧪", cost:1800, col:0x4a5a6a, powerUse:200, size:[8,3], cat:"Maschine"};
 const CHEM_TIME=1.0, CHEM_YIELD=3, CHEM_BUF_CAP=8; // Chemiefabrik: 1 Rohstoff → +CHEM_YIELD Vorrat alle CHEM_TIME s
 const MODE_MONEY={easy:5500, medium:15000, hard:22000}; // Startkapital je Modus
-const MODE_FIELD={easy:32, medium:58, hard:76};         // Feldgröße je Modus (Quellen belegen 2×2)
+const MODE_FIELD={easy:32, medium:58, hard:186};        // Feldgröße je Modus (Quellen belegen 2×2) · schwer: 6× Fläche von 76²
 // Schwer: endliche Vorkommen (Einheiten, bis „erschöpft“). Wasser bleibt unendlich.
 const DEPOSIT_AMOUNT=k=> k==='pump' ? Infinity : (k==='sandmine'||k==='coalmine') ? 1500 : 400;
 // Schwer: Lieferverträge — Abschlussgebühr, dann laufende Lieferung gegen laufende Kosten.
@@ -358,15 +370,32 @@ const RECIPES = {
   waferplant:{in:{ingot:1, water:1}, sup:{}, out:"wafer", time:2.6, outCount:2},
   fab:       {in:{wafer:1, water:1, o2:1}, sup:{resist:1, f2:1, n2:1, boron:1, phos:1, arsenic:1, copper:1}, out:"pwafer", time:4.2},
   packaging: {in:{pwafer:1}, sup:{epoxy:1}, out:"chip", time:2.6},
+  // ---- Quantenchip-Kette (Forschung 'quantum'). Realistische Schritte: Supraleiter (Niob/Kupfer) →
+  // Josephson-Lithografie (Qubit-Wafer) · Kryostat (Kühlung) · Steuer-Elektronik = 2 NORMALE CHIPS je Quantenchip!
+  scondworks:{in:{egsi:1}, sup:{copper:2, n2:1}, out:"scond", time:3.6},
+  qubitfab:  {in:{wafer:1, scond:1}, sup:{resist:1, ar:1}, out:"qubit", time:4.5},
+  cryoworks: {in:{scond:1}, sup:{n2:2, copper:1}, out:"cryo", time:4.0},
+  qfab:      {in:{qubit:1, cryo:1, chip:2}, sup:{ar:2}, out:"qchip", time:8.0},
 };
 const CHIP_PRICE = 155;
+const QCHIP_PRICE = 1500; // Verkaufswert Quantenchip (verbraucht u. a. 2 normale Chips)
 // Sandgrube/Kohlemine/Wasserpumpe sind NICHT baubar — sie werden beim Start zufällig auf der Karte verteilt.
-// Hotbar-Gruppen: je ein Button, Bauteile im Flyout (Hover/Klick). Chemiefabrik + Upgrade nur ab „mittel“.
+// ---- Forschung (Overlay „Forschung“, ab „mittel“): schaltet neue Gebäude frei ----
+const RESEARCH={
+  portal: {name:'Portal-Transport', ic:'🌀', cost:8000,
+    desc:'Schaltet 🌀 Portale frei: 2 Portale bilden ein Paar — Waren (Feststoffe UND Fluide) springen von A nach B. Beide brauchen Strom.'},
+  fusion: {name:'Fusionsreaktor',   ic:'🔆', cost:7000,
+    desc:'Schaltet den 🔆 Fusionsreaktor frei: 800 ⚡ rund um die Uhr (4× AKW), 3×3 Felder, Baukosten 5000 💵.'},
+  quantum:{name:'Quantenchips',     ic:'⚛️', cost:15000,
+    desc:'Schaltet die ⚛️ Quanten-Produktionskette frei: Supraleiter-Werk, Qubit-Fab, Kryostat-Werk & Quantenchip-Fabrik. Ein Quantenchip verbraucht 2 normale Chips (Steuer-Elektronik) und verkauft sich für '+QCHIP_PRICE+' 💵.'},
+};
+// Hotbar-Gruppen: je ein Button, Bauteile im Flyout (Hover/Klick). Chemiefabrik + Upgrade nur ab „mittel“; Forschungs-Gebäude nach Freischaltung.
 const TOOL_GROUPS=()=>[
-  {id:'transport', name:'Transport', ic:'➤',  tools:['belt','cross','pipe','pipecross']},
-  {id:'energy',    name:'Energie',   ic:'⚡', tools:['cable','solar','wind','battery','nuclear']},
+  {id:'transport', name:'Transport', ic:'➤',  tools:['belt','cross','pipe','pipecross',...(game.research.portal?['portal']:[])]},
+  {id:'energy',    name:'Energie',   ic:'⚡', tools:['cable','solar','wind','battery','nuclear',...(game.research.fusion?['fusion']:[])]},
   {id:'mach',      name:'Maschinen', ic:'🏭', tools:['electrolyseur','furnace','siemens','crystal','waferplant','fab','packaging',...(isAdv()?['chemfab']:[])]},
   {id:'stock',     name:'Lager',     ic:'📦', tools:['gastank','depot','seller']},
+  ...(game.research.quantum?[{id:'quant', name:'Quanten', ic:'⚛️', tools:['scondworks','qubitfab','cryoworks','qfab']}]:[]),
 ];
 const TOOLMETA = { delete:{name:"Abriss",ic:"❌",cost:0}, upgrade:{name:"Upgrade",ic:"⬆️",cost:0} }; // Werkzeuge ohne Gebäude
 function toolList(){ // flache Liste (Gültigkeits-Checks)
@@ -404,8 +433,8 @@ const TECH_INFO={
 const KEYMAP = {}; // Bauteile werden per Mausklick in der Leiste gewählt — keine Hotkeys (Tasten gehören der Navigation)
 
 const DAYLEN = 100; // Sekunden pro Tag/Nacht-Zyklus
-const game = { money:5500, chips:0, made:{}, goalsDone:{}, tech:{solar:1,wind:1,battery:1,gastank:1,depot:1,belt:1,pipe:1,chip:1},
-  powerGen:0, powerDemand:0, powerOK:true, rate:0, soldWindow:[],
+const game = { money:5500, chips:0, qchips:0, made:{}, goalsDone:{}, tech:{solar:1,wind:1,battery:1,gastank:1,depot:1,belt:1,pipe:1,chip:1},
+  research:{}, powerGen:0, powerDemand:0, powerOK:true, rate:0, soldWindow:[],
   storedPower:0, powerCap:0, timeOfDay:0.33, sun:1, speed:1, difficulty:'easy',
   simTime:0, stats:{power:[],dem:[],rate:{},snap:{},acc:0}, market:{sat:{}}, contracts:{} };
 function resetStatsMarket(){ game.simTime=0; game.stats={power:[],dem:[],rate:{},snap:{},acc:0}; game.market={sat:{}}; game.contracts={}; }
@@ -469,6 +498,7 @@ function setFieldSize(n){
   grid.position.y = 0.01; grid.material.transparent=true; grid.material.opacity=.4; scene.add(grid);
   scene.fog.near = Math.max(30, N*1.2); scene.fog.far = Math.max(64, N*2.9);
   controls.maxDistance = Math.max(52, N*2.6);
+  camera.far = Math.max(200, N*3.4); camera.updateProjectionMatrix(); // Riesenkarte (schwer): Far-Plane mitwachsen lassen
 }
 setFieldSize(MODE_FIELD.easy);
 
@@ -663,6 +693,62 @@ function makeMesh(kind,dir){
       add(B(.14,.1,.14,0xa8895a),.3,.07,.32); add(B(.11,.09,.11,0x8f7346),.14,.07,.38); // Kisten
       add(B(.1,.08,.1,0xba9a6a),.3,.19,.32);
       indY=.95; break; }
+    case "portal": { // Portal: leuchtender Ring mit kreisenden Orbs (Loop dreht userData.rotor)
+      add(B(.8,.12,.8,0x241a3a,{roughness:.7}),0,.06,0);
+      add(B(.08,.6,.08,0x3a2a5a,{metalness:.4}),-.42,.3,0); add(B(.08,.6,.08,0x3a2a5a,{metalness:.4}),.42,.3,0); // Pylonen
+      { const ring=new THREE.Mesh(new THREE.TorusGeometry(.34,.05,10,28),mat(0x7a4ae0,{metalness:.6,emissive:0x5a2ac0,emissiveIntensity:.8}));
+        ring.position.set(0,.58,0); g.add(ring);
+        const disc=new THREE.Mesh(new THREE.CircleGeometry(.3,24),mat(0x9a6aff,{transparent:true,opacity:.5,emissive:0x7a4ae0,emissiveIntensity:1,side:THREE.DoubleSide}));
+        disc.position.set(0,.58,0); g.add(disc);
+        const rotor=new THREE.Group(); rotor.position.set(0,.58,.03);
+        for(let i=0;i<3;i++){ const o=new THREE.Mesh(new THREE.SphereGeometry(.035,8,8),mat(0xd0b8ff,{emissive:0x9a6aff,emissiveIntensity:1}));
+          o.position.set(Math.cos(i*2.09)*.33, Math.sin(i*2.09)*.33, 0); rotor.add(o); }
+        g.add(rotor); g.userData.rotor=rotor; }
+      indY=1.1; break; }
+    case "fusion": { // Fusionsreaktor 3×3: Tokamak — glühender Plasma-Torus + Magnetspulen
+      const W=3*S;
+      add(B(W-.2,.35,W-.2,0x2a3a55,{roughness:.7}),0,.18,0);
+      add(C(.5,.62,.5,0x3a4a6a,{metalness:.5}),0,.55,0);                     // Sockel
+      { const tor=new THREE.Mesh(new THREE.TorusGeometry(.85,.22,14,36),mat(0x4a7ae0,{metalness:.6,roughness:.3}));
+        tor.rotation.x=Math.PI/2; tor.position.set(0,.98,0); g.add(tor);
+        const plasma=new THREE.Mesh(new THREE.TorusGeometry(.85,.09,10,36),mat(0x66e0ff,{emissive:0x22c0ff,emissiveIntensity:1.4,transparent:true,opacity:.85}));
+        plasma.rotation.x=Math.PI/2; plasma.position.set(0,.98,0); g.add(plasma); g.userData.plasma=plasma; }
+      for(let i=0;i<6;i++){ const a2=i*Math.PI/3; add(B(.22,.55,.3,0x8a94a2,{metalness:.6}),Math.cos(a2)*.85,.98,Math.sin(a2)*.85,0,-a2,0); } // Spulen
+      add(C(.06,.06,.55,0xb8c0cc,{metalness:.7}),0,1.35,0);                  // Zentralsäule
+      add(SP(.08,0x66e0ff,{emissive:0x22c0ff,emissiveIntensity:1}),0,1.68,0);
+      indY=1.95; break; }
+    case "scondworks": { // Supraleiter-Werk: Fabrik mit Kupferspule + Niob-Stab
+      add(B(.74,.36,.62,0x35507a,{roughness:.5}),0,.2,0);
+      add(B(.78,.06,.66,0x466a9a),0,.41,0);
+      { const coil=new THREE.Mesh(new THREE.TorusGeometry(.19,.07,10,22),mat(0xc77b4a,{metalness:.8,roughness:.3}));
+        coil.rotation.x=Math.PI/2; coil.position.set(-.12,.55,0); g.add(coil); }
+      add(C(.045,.045,.36,0x8fa8d8,{metalness:.8}),-.12,.62,0);              // Supraleiter-Stab
+      add(B(.2,.1,.02,0x66e0ff,{emissive:0x2277cc,emissiveIntensity:.6}),.22,.26,.32); // Fenster
+      indY=.9; break; }
+    case "qubitfab": { // Qubit-Fab 2×2: dunkelvioletter Reinraum mit Lithografie-Kuppel
+      add(B(1.74,.5,1.74,0x3a2a5a,{roughness:.5}),0,.27,0);
+      add(B(1.5,.1,1.5,0x4a3a6a),0,.57,0);
+      add(SP(.3,0xb06ae0,{transparent:true,opacity:.5,emissive:0x7a3ac0,emissiveIntensity:.7}),.4,.72,.4); // Kuppel
+      add(B(1.2,.08,.05,0xd0b8ff,{emissive:0x7a4ae0,emissiveIntensity:.6}),0,.32,.86); // Fensterband
+      add(B(.24,.2,.24,0x9aa4b2,{metalness:.5}),-.5,.72,-.4); add(B(.24,.2,.24,0x9aa4b2,{metalness:.5}),-.5,.72,.2); // Dachtechnik
+      indY=1.1; break; }
+    case "cryoworks": { // Kryostat-Werk: weißer Dewar-Tank mit Frost-Ringen
+      add(C(.3,.32,.62,0xe8eef4,{roughness:.35,metalness:.3}),0,.36,0);
+      add(C(.33,.33,.05,0xbfe8f0,{emissive:0x66c0e0,emissiveIntensity:.5}),0,.2,0);
+      add(C(.32,.32,.05,0xbfe8f0,{emissive:0x66c0e0,emissiveIntensity:.5}),0,.52,0);
+      add(SP(.18,0xd8ecf4,{metalness:.3}),0,.74,0);
+      add(C(.04,.04,.38,0x9ab8c8,{metalness:.6}),.28,.5,.15,0,0,Math.PI/2);  // Fülleitung
+      add(B(.18,.24,.18,0x35507a),.32,.13,.28);                              // Kompressor
+      indY=1.05; break; }
+    case "qfab": { // Quantenchip-Fabrik 3×3: Glaskuppel mit goldenem Kryostat-„Kronleuchter“
+      const W=3*S;
+      add(B(W-.2,.55,W-.2,0x1e2a45,{roughness:.5}),0,.3,0);
+      add(B(W-.6,.12,W-.6,0x2a3a5a),0,.63,0);
+      add(SP(.62,0x9fd8ff,{transparent:true,opacity:.28,emissive:0x3388cc,emissiveIntensity:.4}),0,.98,0); // Glaskuppel
+      [[1.18,.28],[1.03,.21],[.88,.14]].forEach(t=>add(C(t[1],t[1],.08,0xd8b04a,{metalness:.85,roughness:.25}),0,t[0],0)); // Gold-Etagen
+      add(B(W-1,.1,.05,0x66ffe0,{emissive:0x22ccaa,emissiveIntensity:.7}),0,.4,W/2-.12); // Fensterband
+      [[1,1],[1,-1],[-1,1],[-1,-1]].forEach(p2=>add(B(.3,.9,.3,0x2e3e60),p2[0]*(W/2-.4),.45,p2[1]*(W/2-.4))); // Ecktürme
+      indY=1.85; break; }
     case "furnace": { // Lichtbogenofen: Stahltiegel, glühende Schmelze, Elektroden-Portal + Schornstein
       add(C(.4,.33,.5,0x7a4630,{roughness:.8}),0,.27,0);                      // Tiegel
       add(C(.43,.43,.07,0x5a3322),0,.55,0);                                   // Ofenrand
@@ -767,6 +853,7 @@ function pipeInflow(b){
   const feeds=s=>{ const nx=b.x+DIRS[s][0], nz=b.z+DIRS[s][1]; const nb=grid_.get(k(nx,nz)); if(!nb) return false;
     if(nb.kind==="pipe") return nb.x+DIRS[nb.dir][0]===b.x && nb.z+DIRS[nb.dir][1]===b.z; // Nachbar-Rohr zeigt herein
     if(nb.kind==="pipecross") return true; // Kreuzung: die durchlaufende Spur kann herein liefern
+    if(nb.kind==="portal") return true; // Partner-Portal gibt auch Fluide rundum ab
     return nb.kind==="pump"||nb.kind==="electrolyseur"||nb.kind==="gastank"; // Fluid-Quellen (inkl. Gastank-Abfluss) geben rundum ab
   };
   if(feeds(opp)) return opp;                       // gerade bevorzugt
@@ -800,6 +887,7 @@ function beltInflow(b){
     if(nb.kind==="belt") return nb.x+DIRS[nb.dir][0]===b.x && nb.z+DIRS[nb.dir][1]===b.z; // Nachbar-Band zeigt herein
     if(nb.kind==="cross") return true; // Kreuzung: die durchlaufende Spur kann herein liefern
     if(nb.kind==="depot") return true; // Depot gibt gepufferte Feststoffe rundum ab
+    if(nb.kind==="portal") return true; // Partner-Portal gibt Waren rundum ab
     const out = SOURCES[nb.kind]?SOURCES[nb.kind].out : (RECIPES[nb.kind]?RECIPES[nb.kind].out:null);
     return out && !isFluid(out); // Quelle/Maschine, die Feststoffe ausgibt
   };
@@ -844,7 +932,11 @@ function machineAccepts(b,type){
   if(b.kind==="chemfab") return isChem(type) && (b.buf[type]||0) < CHEM_BUF_CAP; // Chemiefabrik nimmt die 8 Rohstoffe
   const r=RECIPES[b.kind]; return r && r.in[type]!=null && (b.buf[type]||0) < r.in[type]*4; }
 
-function sellChip(){ game.money += chipPrice(); game.chips++; game.soldWindow.push(performance.now()); }
+// soldWindow: {t,v}-Einträge (Zeitstempel + Erlös) → $/min-Rate umfasst Chips UND Quantenchips
+function sellChip(){ game.money += chipPrice(); game.chips++; game.soldWindow.push({t:performance.now(),v:chipPrice()}); }
+function sellQchip(){ game.money += QCHIP_PRICE; game.qchips=(game.qchips||0)+1; game.soldWindow.push({t:performance.now(),v:QCHIP_PRICE}); }
+const sellerTakes = t => t==="chip"||t==="qchip";
+const sellAtSeller = t => t==="qchip"?sellQchip():sellChip();
 // Versuch, ein Item an Nachbarfeld (nx,nz) auszugeben — von der Quell-Zelle (fx,fz) kommend.
 function tryDeposit(type,nx,nz,fx,fz){
   const nb=grid_.get(k(nx,nz)); if(!nb) return false;
@@ -865,7 +957,8 @@ function tryDeposit(type,nx,nz,fx,fz){
   if(nb.kind==="chemfab" && machineAccepts(nb,type)){ nb.buf[type]=(nb.buf[type]||0)+1; return true; }
   if(nb.kind==="gastank" && isFluid(type) && (nb.buf[type]||0)<gasCap()){ nb.buf[type]=(nb.buf[type]||0)+1; return true; }
   if(nb.kind==="depot" && !isFluid(type) && depotTotal(nb)<depotCap()){ nb.buf[type]=(nb.buf[type]||0)+1; return true; }
-  if(nb.kind==="seller" && type==="chip"){ sellChip(); return true; }
+  if(nb.kind==="portal" && portalCan(nb)){ nb.buf[type]=(nb.buf[type]||0)+1; return true; }
+  if(nb.kind==="seller" && sellerTakes(type)){ sellAtSeller(type); return true; }
   return false;
 }
 // Außenkanten eines (auch mehrfeldrigen) Gebäudes: [nx,nz,quellZelleX,quellZelleZ]
@@ -886,6 +979,22 @@ function tankEmit(b){
     for(let i=0;i<opts.length;i++){ const o=opts[(b._rr+i)%opts.length]; const nb=grid_.get(k(o[0],o[1]));
       if(!nb || nb.kind==="gastank") continue;
       if(tryDeposit(type,o[0],o[1],o[2],o[3])){ b.buf[type]--; b._rr=(b._rr+i+1)%opts.length; break; }
+    }
+  }
+}
+// Portal: 2 Portale bilden ein Paar — Waren rein bei A, raus bei B (beide Richtungen, Feststoffe UND Fluide).
+const PORTAL_BUF=12;
+const portalCan = b => !!b.partner && b.powered && Object.values(b.buf).reduce((s,v)=>s+v,0)<PORTAL_BUF;
+function linkPortals(nb,quiet){ for(const b of buildings){ if(b!==nb && b.kind==="portal" && !b.partner){
+  b.partner=nb; nb.partner=b; if(!quiet) toast("🌀 Portale verbunden — Waren springen jetzt von A nach B!",0x34e0c0); return; } } }
+function portalEmit(b){ // Ausgabe erfolgt am PARTNER-Portal
+  const p=b.partner; if(!p || !b.powered || !p.powered) return;
+  const opts=perimeter(p); if(!opts.length) return; p._rr=p._rr||0;
+  for(const type in b.buf){
+    if((b.buf[type]||0)<=0) continue;
+    for(let i=0;i<opts.length;i++){ const o=opts[(p._rr+i)%opts.length]; const nb=grid_.get(k(o[0],o[1]));
+      if(!nb || nb.kind==="portal") continue;
+      if(tryDeposit(type,o[0],o[1],o[2],o[3])){ b.buf[type]--; p._rr=(p._rr+i+1)%opts.length; break; }
     }
   }
 }
@@ -931,7 +1040,8 @@ function moveItems(dt){
       else if(nb && nb.kind==="chemfab" && machineAccepts(nb,it.type)){ nb.buf[it.type]=(nb.buf[it.type]||0)+1; it._dead=true; scene.remove(it.mesh); continue; }
       else if(nb && nb.kind==="gastank" && isFluid(it.type) && (nb.buf[it.type]||0)<gasCap()){ nb.buf[it.type]=(nb.buf[it.type]||0)+1; it._dead=true; scene.remove(it.mesh); continue; }
       else if(nb && nb.kind==="depot" && !isFluid(it.type) && depotTotal(nb)<depotCap()){ nb.buf[it.type]=(nb.buf[it.type]||0)+1; it._dead=true; scene.remove(it.mesh); continue; }
-      else if(nb && nb.kind==="seller" && it.type==="chip"){ sellChip(); it._dead=true; scene.remove(it.mesh); continue; }
+      else if(nb && nb.kind==="portal" && portalCan(nb)){ nb.buf[it.type]=(nb.buf[it.type]||0)+1; it._dead=true; scene.remove(it.mesh); continue; }
+      else if(nb && nb.kind==="seller" && sellerTakes(it.type)){ sellAtSeller(it.type); it._dead=true; scene.remove(it.mesh); continue; }
       else it.prog=1.0;
     } else it.prog=np;
     placeItemMesh(it);
@@ -1002,6 +1112,8 @@ function tickWork(dt){
       tankEmit(b);
     } else if(b.kind==="depot"){
       depotEmit(b);
+    } else if(b.kind==="portal"){
+      portalEmit(b);
     } else if(b.kind==="chemfab"){ // wandelt eingehende Roh-Chemikalien in Vorräte um („mittel“/„schwer“)
       if(b.powered && b.want){ b.t+=dt; if(b.t>=CHEM_TIME/machineMult(b.speedLvl)){ b.t=0;
         for(const kk of chemKeys()){ if((b.buf[kk]||0)>0){ b.buf[kk]--; SUP[kk].stock+=CHEM_YIELD; } } } }
@@ -1044,6 +1156,9 @@ function statusOf(b){
     const full=t>=c*0.999; return ["🏬 "+t+"/"+c+" Items"+(full?" · VOLL":""), full?0xffd24a:0x44ff88]; }
   if(b.kind==="chemfab"){ const tot=chemKeys().reduce((s,kk)=>s+(b.buf[kk]||0),0); return tot>0?["wandelt um",0x44ff88]:["wartet auf Rohstoffe",0xffd24a]; }
   if(b.kind==="cross"||b.kind==="pipecross") return ["Kreuzung — beide Richtungen laufen geradeaus durch",0x44ff88];
+  if(b.kind==="portal"){ if(!b.partner) return ["kein zweites Portal — baue ein Partner-Portal",0xffd24a];
+    const t=Object.values(b.buf).reduce((s,v)=>s+v,0); return ["⇄ verbunden"+(t?(" · "+Math.round(t)+" in Transit"):""),0x44ff88]; }
+  if(b.kind==="fusion") return b.wired?["🔆 "+DEF.fusion.powerGen+" (24/7)",0x44ff88]:["nicht verbunden",0xffd24a];
   if(SOURCES[b.kind]){
     if(b.left!=null && b.left<=0) return ["ERSCHÖPFT",0x8a8a8a];
     if(b.outBuf>0) return ["Ausgang voll",0xffd24a];
@@ -1095,6 +1210,7 @@ function place(kind,x,z,free){
   for(const [cx,cz] of cells) grid_.set(k(cx,cz),b);
   if(kind!=="belt" && kind!=="pipe" && kind!=="cable" && kind!=="cross" && kind!=="pipecross"){ const lab=document.createElement('div'); lab.className="blabel"; document.getElementById('labels').appendChild(lab); b.labelEl=lab; }
   buildings.push(b);
+  if(kind==="portal") linkPortals(b,free); // Paar-Bildung (beim Laden ohne Toast)
   for(const [cx,cz] of cells) refreshPipesAround(cx,cz); // Rohr-Ecken (neu + Nachbarn) aktualisieren
   return true;
 }
@@ -1102,6 +1218,7 @@ function removeAt(x,z){
   const b = grid_.get(k(x,z)); if(!b) return;
   if(b.fixed){ toast("Natürliche Rohstoffquelle – kann nicht abgerissen werden.",0xffb454); return; }
   game.money += Math.round(DEF[b.kind].cost*0.5);
+  if(b.kind==="portal" && b.partner){ b.partner.partner=null; } // Partner-Portal wird wieder frei
   scene.remove(b.mesh); if(b.labelEl) b.labelEl.remove();
   for(const [cx,cz] of (b.cells||[[b.x,b.z]])) grid_.delete(k(cx,cz));
   buildings.splice(buildings.indexOf(b),1);
@@ -1270,6 +1387,12 @@ const WHY = {
   packaging:"Verpackt den Chip schützend in ein Gehäuse.",
   seller:"Verkauft fertige Chips und bringt dir Geld.",
   chemfab:"Ab Modus „mittel“: Verarbeitet die chemischen Rohstoff-Vorkommen (per ➤ Förderband zugeführt) und füllt damit die nicht kaufbaren Vorräte (N₂, Fluor, Photoresist, Bor, Phosphor, Arsen, Kupfer, Epoxidharz, Argon — im Modus „schwer“ auch HCl) wieder auf. Belegt 8×3 Felder, braucht 200 ⚡.",
+  portal:"Per Forschung freigeschaltet: Baue ZWEI Portale — sie verbinden sich automatisch zum Paar. Waren von Bändern UND Rohren springen von einem Portal zum anderen (beide Richtungen). Beide Portale brauchen Strom (je 15 ⚡).",
+  fusion:"Per Forschung freigeschaltet: Fusionskraft wie in der Sonne — 800 ⚡ rund um die Uhr (4× AKW). Teuer, groß (3×3), aber die ultimative Energiequelle fürs Lategame.",
+  scondworks:"Quanten-Kette Schritt 1: Fertigt supraleitende Leiterbahnen aus Reinst-Silizium, Kupfer und Stickstoff — die Grundlage jedes Qubits.",
+  qubitfab:"Quanten-Kette Schritt 2: Belichtet Josephson-Kontakte auf einen Roh-Wafer und macht daraus einen Qubit-Wafer. Braucht Wafer + Supraleiter.",
+  cryoworks:"Quanten-Kette Schritt 3: Baut Kryostate (Kühlgeräte nahe dem absoluten Nullpunkt) — Qubits rechnen nur eiskalt. Braucht Supraleiter + viel Stickstoff.",
+  qfab:"Endmontage: Qubit-Wafer + Kryostat + 2 NORMALE CHIPS (Steuer-Elektronik!) → 1 Quantenchip (1500 💵). Deine Halbleiter-Produktion ist also Teil der Quanten-Kette — verkaufe nicht alles!",
   delete:"Reißt Gebäude ab (50 % der Kosten zurück).",
   upgrade:"Ab Modus „mittel“: Werkzeug wählen und eine Maschine anklicken, um sie einzeln auf mehr Geschwindigkeit zu upgraden (bis Stufe 3). Kosten richten sich nach der Maschine.",
 };
@@ -1283,9 +1406,10 @@ function infoHTML(kind){
   else if(kind==="electrolyseur") prod.push("Wasserstoff (H₂) ×2 · Sauerstoff (O₂)");
   else if(RECIPES[kind] && RECIPES[kind].out) prod.push(ITEMS[RECIPES[kind].out].name+(RECIPES[kind].outCount?(" ×"+RECIPES[kind].outCount):""));
   else if(SOURCES[kind]) prod.push(ITEMS[SOURCES[kind].out].name);
-  if(d.powerGen) prod.push(d.powerGen+" ⚡"+(kind==="solar"?" (tagsüber)":kind==="wind"?" (24/7, konstant)":kind==="nuclear"?" (24/7)":""));
+  if(d.powerGen) prod.push(d.powerGen+" ⚡"+(kind==="solar"?" (tagsüber)":kind==="wind"?" (24/7, konstant)":(kind==="nuclear"||kind==="fusion")?" (24/7)":""));
+  if(kind==="portal") prod.push("teleportiert Waren zum Partner-Portal (immer paarweise bauen!)");
   if(d.powerCap) prod.push("speichert "+d.powerCap+" ⚡");
-  if(kind==="seller") prod.push("+"+chipPrice()+" 💵 pro Chip");
+  if(kind==="seller"){ prod.push("+"+chipPrice()+" 💵 pro Chip"); if(game.research.quantum) prod.push("+"+QCHIP_PRICE+" 💵 pro ⚛️ Quantenchip"); }
   if(kind==="chemfab"){ cons.push("Roh-Chemikalien (Vorkommen)"); prod.push("füllt Vorräte auf (N₂ · Fluor · Photoresist · Bor · Phosphor · Arsen · Kupfer · Epoxidharz · Argon)"); }
   const fp=d.size?` · belegt ${d.size[0]*d.size[1]} Felder (${d.size[0]}×${d.size[1]})`:(kind==="electrolyseur"?" · belegt 3 Felder (H₂- & O₂-Rohr fest verbaut)":"");
   return `<h3>${d.ic} ${d.name}</h3>`+
@@ -1371,10 +1495,10 @@ function updateHUD(){
   document.getElementById('s-money').textContent = Math.floor(game.money)+" 💵";
   document.getElementById('s-money').style.color = game.money<200?"var(--bad)":"var(--good)";
   const ps=document.getElementById('s-power'); ps.innerHTML=`${Math.round(game.powerGen)} erzeugt · ${Math.round(game.powerDemand)} benötigt`+(game.powerCap>0?` · <span style="color:#46d97e">🔋 ${Math.round(game.storedPower)}/${game.powerCap}</span>`:""); ps.style.color=(game.powerGen>=game.powerDemand)?"var(--good)":"var(--bad)";
-  document.getElementById('s-chips').textContent=game.chips;
+  document.getElementById('s-chips').textContent=game.chips+(game.qchips?(" · ⚛️"+game.qchips):"");
   // Verkaufsrate /min
-  const now=performance.now(); game.soldWindow=game.soldWindow.filter(t=>now-t<60000);
-  document.getElementById('s-rate').textContent=(game.soldWindow.length*chipPrice());
+  const now=performance.now(); game.soldWindow=game.soldWindow.filter(e=>now-e.t<60000);
+  document.getElementById('s-rate').textContent=Math.round(game.soldWindow.reduce((s,e)=>s+e.v,0));
   // Tageszeit
   const h=Math.floor(game.timeOfDay*24), m=Math.floor((game.timeOfDay*24%1)*60);
   const ts=document.getElementById('s-time'); ts.textContent=(game.sun>0.06?"☀️":"🌙")+" "+String(h).padStart(2,"0")+":"+String(m).padStart(2,"0"); ts.style.color=game.sun>0.06?"var(--warn)":"var(--acc2)";
@@ -1385,7 +1509,8 @@ function labelHTML(b){
   const d=DEF[b.kind]; let out=`<span class="t">${d.ic} ${d.name}</span>`;
   if(b.kind==="solar") out+=`<br><span class="p">+${d.powerGen} ⚡ Strom (tagsüber)</span>`;
   else if(b.kind==="wind") out+=`<br><span class="p">+${Math.round(d.powerGen*windMult())} ⚡ Strom (24/7, konstant)</span>${windMult()>1?`<br><span class="u">Windräder Lv ${game.tech.wind}</span>`:""}`;
-  else if(b.kind==="nuclear") out+=`<br><span class="p">+${d.powerGen} ⚡ Strom (24/7)</span>`;
+  else if(b.kind==="nuclear"||b.kind==="fusion") out+=`<br><span class="p">+${d.powerGen} ⚡ Strom (24/7)</span>`;
+  else if(b.kind==="portal") out+=b.partner?`<br><span class="p">⇄ mit Partner-Portal verbunden</span><br><span class="u">-${d.powerUse} ⚡ je Portal</span>`:`<br><span class="w">kein zweites Portal!</span>`;
   else if(b.kind==="electrolyseur") out+=`<br><span class="p">→ H₂ (vorne) · O₂ (hinten)</span><br><span class="u">braucht Wasser · -${d.powerUse} ⚡</span>`;
   else if(b.kind==="gastank") out+=`<br><span class="p">Gas-Puffer</span><br><span class="u">H₂ ${Math.round(b.buf.h2||0)} · O₂ ${Math.round(b.buf.o2||0)} / ${gasCap()}</span>`;
   else if(b.kind==="depot"){ const tot=Object.entries(b.buf).filter(([,v])=>v>0).map(([kk,v])=>ITEMS[kk].name+"×"+Math.floor(v)).join(", ");
@@ -1456,7 +1581,7 @@ function showTip(){ const box=document.getElementById('tipbox'); box.innerHTML="
   box.classList.remove('hide'); clearTimeout(showTip._t); showTip._t=setTimeout(()=>box.classList.add('hide'),6500); }
 
 /* ===================== ZIELE ===================== */
-function currentRate(){ const now=performance.now(); return game.soldWindow.filter(t=>now-t<60000).length*chipPrice(); }
+function currentRate(){ const now=performance.now(); return game.soldWindow.filter(e=>now-e.t<60000).reduce((s,e)=>s+e.v,0); }
 const GOALS={
   easy:[
     {id:'build', label:'Baue dein erstes Gebäude',            done:()=>buildings.some(b=>!b.fixed)},
@@ -1471,6 +1596,7 @@ const GOALS={
     {id:'gen',    label:'Erreiche 2000 kWh Stromerzeugung', prog:()=>Math.round(game.powerGen)+'/2000',   done:()=>game.powerGen>=2000},
     {id:'cap',    label:'Erreiche 1000 kW Energiespeicher',  prog:()=>Math.round(game.powerCap)+'/1000',  done:()=>game.powerCap>=1000},
     {id:'chip100',label:'Stelle 100 Chips her',         prog:()=>Math.min(game.made.chip||0,100)+'/100',  done:()=>(game.made.chip||0)>=100},
+    {id:'qchip',  label:'Erforsche ⚛️ Quantenchips und stelle einen her', done:()=>(game.made.qchip||0)>=1},
   ],
   hard:[
     {id:'sup10',  label:'Fülle alle 10 Vorräte (inkl. HCl) in der Chemiefabrik auf', prog:()=>chemKeys().filter(kk=>SUP[kk].stock>0).length+'/'+chemKeys().length, done:()=>chemKeys().every(kk=>SUP[kk].stock>0)},
@@ -1481,6 +1607,7 @@ const GOALS={
     {id:'gen',    label:'Erreiche 4000 kWh Stromerzeugung', prog:()=>Math.round(game.powerGen)+'/4000',   done:()=>game.powerGen>=4000},
     {id:'cap',    label:'Erreiche 2500 kW Energiespeicher',  prog:()=>Math.round(game.powerCap)+'/2500',  done:()=>game.powerCap>=2500},
     {id:'chip500',label:'Stelle 500 Chips her',         prog:()=>Math.min(game.made.chip||0,500)+'/500',  done:()=>(game.made.chip||0)>=500},
+    {id:'qchip',  label:'Erforsche ⚛️ Quantenchips und stelle 10 her', prog:()=>Math.min(game.made.qchip||0,10)+'/10', done:()=>(game.made.qchip||0)>=10},
   ]
 };
 function goalList(){ return GOALS[game.difficulty]||GOALS.easy; }
@@ -1508,19 +1635,38 @@ function renderTech(){ const grid=document.getElementById('tt-grid'); grid.inner
             :`<button class="tt-buy" data-k="${key}" ${game.money<cost?'disabled':''}>Upgrade → Stufe ${lvl+1} · ${cost} 💵</button>`);
     grid.appendChild(card);
   }
+  // ---- Neue Technologien (einmalige Freischaltungen) ----
+  const hd=document.createElement('div'); hd.className='st-sec'; hd.style.gridColumn='1 / -1'; hd.style.margin='10px 0 0';
+  hd.textContent='🧪 Neue Technologien'; grid.appendChild(hd);
+  for(const key in RESEARCH){ const r=RESEARCH[key], done=!!game.research[key];
+    const card=document.createElement('div'); card.className='tt-card';
+    card.innerHTML=`<h3>${r.ic} ${r.name}</h3><div class="eff" style="color:var(--dim);font-family:var(--sans);line-height:1.4">${r.desc}</div>`+
+      (done?`<button class="tt-buy" disabled>✓ Erforscht</button>`
+           :`<button class="tt-buy" data-r="${key}" ${game.money<r.cost?'disabled':''}>Erforschen · ${r.cost} 💵</button>`);
+    grid.appendChild(card);
+  }
   grid.querySelectorAll('.tt-buy[data-k]').forEach(btn=>btn.onclick=()=>buyTech(btn.dataset.k));
+  grid.querySelectorAll('.tt-buy[data-r]').forEach(btn=>btn.onclick=()=>buyResearch(btn.dataset.r));
+}
+function buyResearch(key){ const r=RESEARCH[key]; if(!r || game.research[key]) return;
+  if(game.money<r.cost){ toast("Zu wenig Geld für die Forschung ("+r.cost+" 💵).",0xff5d6c); return; }
+  game.money-=r.cost; game.research[key]=true;
+  toast("🔬 Erforscht: "+r.ic+" "+r.name+" — neue Bauteile in der Leiste!",0x34e0c0);
+  buildHotbar(); renderTech();
 }
 // Nur die Kaufbarkeit (disabled) je Frame aktualisieren — KEIN DOM-Neuaufbau, sonst „verschluckt“ der Re-Render den Klick.
 function refreshTechButtons(){ document.querySelectorAll('#tt-grid .tt-buy[data-k]').forEach(btn=>{
-  const key=btn.dataset.k, lvl=game.tech[key]||1; if(lvl>=3) return; btn.disabled = game.money<TECH_COST[key][lvl-1]; }); }
+  const key=btn.dataset.k, lvl=game.tech[key]||1; if(lvl>=3) return; btn.disabled = game.money<TECH_COST[key][lvl-1]; });
+  document.querySelectorAll('#tt-grid .tt-buy[data-r]').forEach(btn=>{
+    const key=btn.dataset.r; if(game.research[key]) return; btn.disabled = game.money<RESEARCH[key].cost; }); }
 function buyTech(key){ const lvl=game.tech[key]||1; if(lvl>=3) return; const cost=TECH_COST[key][lvl-1];
   if(game.money<cost){ toast("Zu wenig Geld für Upgrade ("+cost+" 💵).",0xff5d6c); return; }
   game.money-=cost; game.tech[key]=lvl+1; toast("🔬 "+TECH_INFO[key].name+" → Stufe "+(lvl+1),0x34e0c0); renderTech();
 }
 
 /* ===================== STATISTIK (nur schwer) ===================== */
-const STAT_OUT=['mgsi','egsi','ingot','wafer','pwafer','chip'];          // produzierte Belt-Items
-const STAT_MACH=['furnace','siemens','crystal','waferplant','fab','packaging','electrolyseur','chemfab'];
+const STAT_OUT=['mgsi','egsi','ingot','wafer','pwafer','chip','scond','qubit','cryo','qchip']; // produzierte Belt-Items
+const STAT_MACH=['furnace','siemens','crystal','waferplant','fab','packaging','electrolyseur','chemfab','scondworks','qubitfab','cryoworks','qfab'];
 function renderStats(){
   const s=game.stats, body=document.getElementById('stats-body'); const fmt=n=>Math.round((n||0)*10)/10;
   const prod=STAT_OUT.map(it=>`<div class="st-row"><span>${ITEMS[it].name}</span><b>${fmt(s.rate[it])} /min</b></div>`).join("");
@@ -1644,6 +1790,8 @@ function loop(){
   for(const b of buildings){
     if((b.kind==="belt"||b.kind==="pipe")&&b.mesh.userData.arrow) b.mesh.userData.arrow.material.emissiveIntensity=pulse;
     else if(b.kind==="wind"&&b.mesh.userData.rotor) b.mesh.userData.rotor.rotation.z-=dt*2.4;
+    else if(b.kind==="portal"&&b.mesh.userData.rotor) b.mesh.userData.rotor.rotation.z+=dt*1.8;
+    else if(b.kind==="fusion"&&b.mesh.userData.plasma) b.mesh.userData.plasma.material.emissiveIntensity=1+.6*Math.sin(performance.now()*.004);
   }
   panCamera(dt); rotateSmooth(dt);
   controls.update();
@@ -1667,18 +1815,18 @@ function scatterResources(){
   const diff=game.difficulty;
   // „einfach“: Basisquellen · „mittel“: + 9 Chemie-Vorkommen · „schwer“: + HCl, alle Vorkommen ENDLICH
   const want = diff==='hard'
-    ? [["sandmine",10],["coalmine",8],["pump",8], ...chemKeys().map(kk=>['dep_'+kk,3])]
+    ? [["sandmine",24],["coalmine",20],["pump",20], ...chemKeys().map(kk=>['dep_'+kk,6])] // 6× Fläche → deutlich mehr Quellen
     : diff==='medium'
     ? [["sandmine",8],["coalmine",6],["pump",6], ...CHEM_KEYS.map(kk=>['dep_'+kk,3])]
     : [["sandmine",5],["coalmine",3],["pump",3]];
   const placed=[];                                  // alle Quellen (Mindestabstand zueinander)
   const byType={};                                  // je Typ (größerer Abstand → ausgeglichene Verteilung)
-  const minDist  = diff==='easy'?8:7;               // Abstand zwischen beliebigen Quellen (2×2!) — großzügig, damit Platz zum Bauen bleibt
-  const sameDist = diff==='easy'?10:14;             // Abstand zwischen gleichartigen Quellen
+  const minDist  = diff==='easy'?8:diff==='hard'?9:7; // Abstand zwischen beliebigen Quellen (2×2!) — großzügig, damit Platz zum Bauen bleibt
+  const sameDist = diff==='easy'?10:diff==='hard'?24:14; // Abstand zwischen gleichartigen Quellen
   for(const [kind,num] of want){
     byType[kind]=byType[kind]||[];
     let made=0, tries=0;
-    while(made<num && tries<2500){ tries++;
+    while(made<num && tries<5000){ tries++;
       const x=2+Math.floor(Math.random()*(N-5)), z=2+Math.floor(Math.random()*(N-5)); // 2×2-Fußabdruck
       if(placed.some(p=>Math.abs(p[0]-x)+Math.abs(p[1]-z)<minDist)) continue;
       if(byType[kind].some(p=>Math.abs(p[0]-x)+Math.abs(p[1]-z)<sameDist)) continue;
@@ -1694,8 +1842,8 @@ function scatterResources(){
 /* ===================== SPEICHERN / LADEN ===================== */
 function saveGame(){
   try{
-    const data={ v:2, money:game.money, chips:game.chips, timeOfDay:game.timeOfDay, difficulty:game.difficulty,
-      made:game.made, goalsDone:game.goalsDone, tech:game.tech, contracts:game.contracts,
+    const data={ v:3, money:game.money, chips:game.chips, qchips:game.qchips, timeOfDay:game.timeOfDay, difficulty:game.difficulty,
+      made:game.made, goalsDone:game.goalsDone, tech:game.tech, research:game.research, contracts:game.contracts,
       autobuy:document.getElementById('autobuy').checked,
       sup:Object.fromEntries(Object.keys(SUP).map(kk=>[kk,SUP[kk].stock])),
       buildings:buildings.map(b=>({kind:b.kind,x:b.x,z:b.z,dir:b.dir,fixed:!!b.fixed,buf:b.buf,outBuf:b.outBuf,outType:b.outType,stored:b.stored,h2Buf:b.h2Buf||0,o2Buf:b.o2Buf||0,t:b.t,speedLvl:b.speedLvl||1,left:(b.left!=null&&isFinite(b.left))?b.left:undefined})),
@@ -1729,7 +1877,8 @@ function loadGame(d){
     } } }
   placeDir=1;
   for(const si of (d.items||[])){ const t=grid_.get(k(si.x,si.z)); if(t&&isCarrier(t)) makeItem(si.type,si.x,si.z,si.prog,si.dir); }
-  game.money=(d.money!=null?d.money:game.money); game.chips=d.chips||0; game.timeOfDay=d.timeOfDay||0.33; game.speed=1; game.soldWindow=[];
+  game.money=(d.money!=null?d.money:game.money); game.chips=d.chips||0; game.qchips=d.qchips||0; game.timeOfDay=d.timeOfDay||0.33; game.speed=1; game.soldWindow=[];
+  game.research=d.research||{}; buildHotbar(); // Forschungs-Gebäude in der Leiste freischalten
   game.made=d.made||{}; game.goalsDone=d.goalsDone||{}; game.tech=Object.assign({solar:1,wind:1,battery:1,gastank:1,depot:1,belt:1,pipe:1,chip:1}, d.tech||{}); resetStatsMarket();
   game.contracts=d.contracts||{}; buildGoals();
   for(const kk in SUP){ if(d.sup && d.sup[kk]!=null) SUP[kk].stock=d.sup[kk]; }
@@ -1776,6 +1925,7 @@ function applyDifficulty(diff){
 function resetSupplies(diff){ for(const kk in SUP){
   SUP[kk].stock = diff==='hard' ? 0 : (diff==='medium' && kk!=='hcl') ? 0 : 80; } }
 function startFactory(diff){
+  game.research={}; game.qchips=0;
   applyDifficulty(diff);
   game.money = MODE_MONEY[diff]||MODE_MONEY.easy; game.chips=0; game.soldWindow=[]; resetSupplies(diff);
   game.made={}; game.goalsDone={}; game.tech={solar:1,wind:1,battery:1,gastank:1,depot:1,belt:1,pipe:1,chip:1}; resetStatsMarket();
