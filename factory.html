@@ -286,6 +286,9 @@ const DEF = {
   coalmine:  {name:"Kohlemine", ic:"⚫", cost:90,  col:0x3a3a3a, powerUse:3,  size:[2,2], cat:"Rohstoff"},
   pump:      {name:"Wasserpumpe", ic:"💧", cost:120, col:0x2a8fb0, powerUse:6, size:[2,2], cat:"Rohstoff"},
   solar:     {name:"Solarkraftwerk", ic:"☀️", cost:140, col:0x2e6da4, powerGen:25, cat:"Versorgung"},
+  // Windrad: läuft 24/7 (konstant). Balancing: Solar liefert 25⚡ nur tagsüber (Ø ≈ 8⚡ über den Tag, braucht
+  // nachts Speicher) — Wind liefert konstant 12⚡ für 220 💵 → pro ⚡ etwas teurer, dafür ohne Akku-Bedarf.
+  wind:      {name:"Windrad", ic:"🌬️", cost:220, col:0xb8c2cc, powerGen:12, cat:"Versorgung"},
   battery:   {name:"Energiespeicher", ic:"🔋", cost:200, col:0x2e8a5a, powerCap:300, cat:"Versorgung"},
   nuclear:   {name:"Atomkraftwerk", ic:"☢️", cost:2400, col:0x6a7a3a, powerGen:200, size:[3,2], cat:"Versorgung"},
   electrolyseur:{name:"Elektrolyseur", ic:"💠", cost:300, col:0x2f8f8f, powerUse:20, cat:"Maschine"},
@@ -325,7 +328,7 @@ for(const kk of [...CHEM_KEYS,'hcl']){ const m=CHEM_META[kk];
 DEF.chemfab={name:"Chemiefabrik", ic:"🧪", cost:1800, col:0x4a5a6a, powerUse:200, size:[8,3], cat:"Maschine"};
 const CHEM_TIME=1.0, CHEM_YIELD=3, CHEM_BUF_CAP=8; // Chemiefabrik: 1 Rohstoff → +CHEM_YIELD Vorrat alle CHEM_TIME s
 const MODE_MONEY={easy:5500, medium:15000, hard:22000}; // Startkapital je Modus
-const MODE_FIELD={easy:26, medium:50, hard:68};         // Feldgröße je Modus (Quellen belegen 2×2)
+const MODE_FIELD={easy:32, medium:58, hard:76};         // Feldgröße je Modus (Quellen belegen 2×2)
 // Schwer: endliche Vorkommen (Einheiten, bis „erschöpft“). Wasser bleibt unendlich.
 const DEPOSIT_AMOUNT=k=> k==='pump' ? Infinity : (k==='sandmine'||k==='coalmine') ? 1500 : 400;
 // Schwer: Lieferverträge — Abschlussgebühr, dann laufende Lieferung gegen laufende Kosten.
@@ -346,7 +349,7 @@ const RECIPES = {
 };
 const CHIP_PRICE = 155;
 // Sandgrube/Kohlemine/Wasserpumpe sind NICHT baubar — sie werden beim Start zufällig auf der Karte verteilt.
-const TOOLS = ["belt","cross","pipe","pipecross","cable","solar","battery","nuclear","electrolyseur","gastank","furnace","siemens","crystal","waferplant","fab","packaging","seller","delete"];
+const TOOLS = ["belt","cross","pipe","pipecross","cable","solar","wind","battery","nuclear","electrolyseur","gastank","furnace","siemens","crystal","waferplant","fab","packaging","seller","delete"];
 const TOOLMETA = { delete:{name:"Abriss",ic:"❌",cost:0}, upgrade:{name:"Upgrade",ic:"⬆️",cost:0} }; // Werkzeuge ohne Gebäude
 function toolList(){ // Chemiefabrik + Upgrade-Werkzeug nur in „mittel“/„schwer“
   if(!isAdv()) return TOOLS;
@@ -566,6 +569,17 @@ function makeMesh(kind,dir){
       add(B(.12,.34,.12,0x3a4658),0,.17,0);
       add(B(.74,.04,.5,0x163a6a,{emissive:0x1f56a0,emissiveIntensity:.6,metalness:.4,roughness:.3}),0,.42,-.02,-0.5);
       add(B(.74,.03,.2,0x1d478a,{emissive:0x2a62b8,emissiveIntensity:.5,metalness:.4,roughness:.3}),0,.28,.32,-0.5); indY=.74; break;
+    case "wind": { // Windrad: konischer Mast + Gondel + 3-Blatt-Rotor (dreht sich im Loop)
+      add(C(.09,.15,1.5,0xd8dde6,{roughness:.5}),0,.78,0);                    // Mast
+      add(C(.17,.17,.06,0x9aa4b2,{metalness:.4}),0,.06,0);                    // Fußring
+      add(B(.2,.16,.32,0xb8c2cc,{metalness:.4,roughness:.4}),0,1.58,0);       // Gondel
+      const rotor=new THREE.Group(); rotor.position.set(0,1.58,.2);
+      rotor.add(new THREE.Mesh(new THREE.SphereGeometry(.07,10,10),mat(0x8a94a2,{metalness:.6})));
+      for(let i=0;i<3;i++){ const hold=new THREE.Group();
+        const bl=new THREE.Mesh(new THREE.BoxGeometry(.06,.6,.02),mat(0xeef2f8,{roughness:.35}));
+        bl.position.y=.34; bl.geometry.translate(0,0,0); hold.add(bl); hold.rotation.z=i*2*Math.PI/3; rotor.add(hold); }
+      g.add(rotor); g.userData.rotor=rotor;
+      indY=1.95; break; }
     case "pump": { // 2×2: Wasserbecken + Pumpenhaus + Bohr-Schwengel
       add(B(1.8,.16,1.8,0x24506a,{roughness:.85}),0,.08,0);
       add(C(.62,.66,.16,0x1d6f8a),-.35,.22,-.3,0,0,0,24);                     // Beckenrand
@@ -576,16 +590,24 @@ function makeMesh(kind,dir){
       add(B(.08,.5,.08,0x6a8a9a,{metalness:.5}),-.3,.6,.5);                   // Schwengel-Pumpe
       add(B(.5,.07,.1,0x8aa8b8,{metalness:.5}),-.15,.86,.5,0,0,.3);
       indY=.95; break; }
-    case "battery": // Energiespeicher (Akku mit Pluspol + gelbem Streifen)
-      add(B(.62,.46,.7,0x2e8a5a,{metalness:.3}),0,.25,0);
-      add(B(.16,.07,.16,0x9fe0b0),0,.51,0);
-      add(B(.46,.12,.03,0xffd24a,{emissive:0x4a3a00,emissiveIntensity:.6}),0,.32,.36); indY=.78; break;
-    case "nuclear": { // Atomkraftwerk: belegt 3×2 Felder, 2 Kühltürme + Reaktorkuppel
+    case "battery": { // Energiespeicher: Akku-Schrank mit zwei Polen, Warnstreifen + Ladebalken
+      add(B(.64,.48,.72,0x1f6e48,{metalness:.3,roughness:.5}),0,.26,0);
+      add(B(.68,.06,.76,0x175236),0,.53,0);                                   // Deckel
+      add(C(.08,.08,.12,0x9fe0b0,{metalness:.5}),-.17,.61,0);                 // Pluspol
+      add(C(.06,.06,.1,0xcfd6de,{metalness:.7}),.17,.6,0);                    // Minuspol
+      add(B(.5,.12,.035,0xffd24a,{emissive:0x4a3a00,emissiveIntensity:.7}),0,.36,.375); // Warnstreifen
+      add(B(.5,.05,.035,0x46d97e,{emissive:0x0c3a1f,emissiveIntensity:.9}),0,.17,.375); // Ladebalken
+      indY=.82; break; }
+    case "nuclear": { // Atomkraftwerk 3×2: Kühltürme mit Dampfkranz, Reaktorkuppel, Fensterband + Warnlicht
       const W=3*S, H=2*S;
       add(B(W-.18,.4,H-.18,0x55602e,{roughness:.8}),0,.2,0);
       add(C(.46,.6,1.15,0xd2d7de,{roughness:.7}), -W/2+.78,.78,0); add(C(.52,.52,.16,0x9fb0bf), -W/2+.78,1.38,0);
       add(C(.46,.6,1.15,0xd2d7de,{roughness:.7}),  W/2-.78,.78,0); add(C(.52,.52,.16,0x9fb0bf),  W/2-.78,1.38,0);
-      add(SP(.44,0x7aa83f,{emissive:0x4a7711,emissiveIntensity:.5}),0,.62,0);
+      add(SP(.3,0xf0f4f8,{transparent:true,opacity:.35}), -W/2+.78,1.55,0);   // „Dampf"
+      add(SP(.3,0xf0f4f8,{transparent:true,opacity:.35}),  W/2-.78,1.55,0);
+      add(SP(.44,0x7aa83f,{emissive:0x4a7711,emissiveIntensity:.5}),0,.62,0); // Reaktorkuppel
+      add(SP(.05,0xff4444,{emissive:0xcc1111,emissiveIntensity:1}),0,1.08,0); // Warnlicht
+      add(B(.8,.1,.04,0x5fd0ff,{emissive:0x2277cc,emissiveIntensity:.5}),0,.3,H/2-.11); // Fensterband
       add(B(.5,.16,.5,0xffd24a,{emissive:0x4a3a00,emissiveIntensity:.5}),0,.5,H/2-.42); indY=1.7; break; }
     case "electrolyseur": // Kern (Mitte) + fest verbaute Rohre: H₂ nach vorne (+z), O₂ nach hinten (−z)
       add(B(.78,.16,.78,0x1d5563),0,.08,0);
@@ -599,41 +621,83 @@ function makeMesh(kind,dir){
       add(CO(.12,.24,0xe6f0ff,{emissive:0x6a8aa0,emissiveIntensity:1},4),0,.38,-1.4,-Math.PI/2);
       add(makeTextSprite("H₂",0xbfeeff),0,.62,1.0); add(makeTextSprite("O₂",0xeef4ff),0,.62,-1.0); // Beschriftung der Rohre
       indY=.9; break;
-    case "gastank": // Gas-Puffer: großer Drucktank mit Glaskuppel
+    case "gastank": { // Gas-Puffer: Drucktank mit Glaskuppel, Handrad-Ventil + Standfüße
       add(C(.34,.36,.72,0x6f6636,{metalness:.5,roughness:.4}),0,.38,0);
       add(C(.36,.36,.08,0x8a7d3a),0,.74,0);
       add(SP(.34,0x9fe8ff,{transparent:true,opacity:.22,emissive:0x2c7a90,emissiveIntensity:.35}),0,.76,0);
-      add(B(.12,.22,.05,0xe6f0ff,{emissive:0x6a8aa0,emissiveIntensity:.4}),0,.42,.35); indY=1.0; break;
-    case "furnace": // Tiegel mit glühender Schmelze + Elektroden
-      add(C(.36,.3,.46,0x6b3a24,{roughness:.85}),0,.25,0);
-      add(C(.31,.31,.07,0xff5a00,{emissive:0xff4400,emissiveIntensity:1.3}),0,.5,0);
-      [[.18,.18],[-.2,.05],[.05,-.2]].forEach(p=>add(C(.04,.04,.5,0x1c1c1c),p[0],.62,p[1])); indY=.94; break;
-    case "siemens": // Destillationssäule mit Ringen
-      add(B(.5,.16,.5,0x2c4a38),0,.08,0);
-      add(C(.17,.17,.78,0x4a7a55,{metalness:.4}),0,.55,0);
-      add(C(.21,.21,.05,0x6fae82),0,.45,0); add(C(.21,.21,.05,0x6fae82),0,.66,0); indY=1.02; break;
-    case "crystal": // Tiegel + dünner Ziehstab + Barren
-      add(C(.3,.24,.32,0x5a4a6a),0,.18,0);
-      add(C(.26,.26,.06,0xff6a00,{emissive:0xff5500,emissiveIntensity:1}),0,.36,0);
-      add(C(.03,.03,.66,0xcfcfcf,{metalness:.7}),0,.66,0);
-      add(CO(.12,.26,0xbcd0ec,{emissive:0x223344,emissiveIntensity:.4}),0,.5,0,Math.PI); indY=1.05; break;
-    case "waferplant": // gestapelte Wafer-Scheiben
-      add(B(.7,.1,.7,0x2c3e58),0,.05,0);
-      [.18,.3,.42,.54].forEach(y=>add(C(.3,.3,.05,0x9fb3c9,{metalness:.6,roughness:.25}),0,y,0)); indY=.84; break;
-    case "fab": // Reinraum-Komplex 2×2 mit Kuppel/Lithografie
-      add(B(1.74,.5,1.74,0x8a4fa0,{roughness:.5}),0,.27,0);
-      add(B(1.4,.1,1.4,0x9a5fb0),0,.55,0);
-      add(SP(.36,0x9fb3ff,{transparent:true,opacity:.5,emissive:0x335588,emissiveIntensity:.5}),0,.64,0);
-      add(B(.16,.16,.16,0x5fd0ff,{emissive:0x2277cc,emissiveIntensity:.7}),.6,.66,.6);
-      add(B(.16,.16,.16,0x5fd0ff,{emissive:0x2277cc,emissiveIntensity:.7}),-.6,.66,-.6); indY=1.05; break;
-    case "packaging": // Chip-Gehäuse mit goldenem Die + Beinchen
-      add(B(.62,.18,.62,0x141414),0,.18,0);
-      add(B(.32,.07,.32,0xffd24a,{emissive:0x4a3a00,emissiveIntensity:.4,metalness:.6}),0,.3,0);
-      [[.27,.27],[.27,-.27],[-.27,.27],[-.27,-.27]].forEach(p=>add(B(.05,.16,.05,0xb0b0b0),p[0],.08,p[1])); indY=.8; break;
-    case "seller": // LKW (Anhänger + Kabine + Räder)
-      add(B(.5,.3,.4,0x3a9a5a),-.05,.22,0);
-      add(B(.24,.26,.36,0x2e7d48),.34,.2,0);
-      [[-.18,.2],[-.18,-.2],[.3,.2],[.3,-.2]].forEach(p=>add(SP(.08,0x111111),p[0],.06,p[1])); indY=.74; break;
+      add(B(.12,.22,.05,0xe6f0ff,{emissive:0x6a8aa0,emissiveIntensity:.4}),0,.42,.35);
+      const vw=new THREE.Mesh(new THREE.TorusGeometry(.09,.02,8,16),mat(0xd0c070,{metalness:.6}));
+      vw.position.set(.4,.5,0); vw.rotation.y=Math.PI/2; g.add(vw);
+      add(C(.03,.03,.14,0x8a7d3a,{metalness:.6}),.36,.5,0,0,0,Math.PI/2);     // Ventilstutzen
+      [[.24,.24],[-.24,.24],[.24,-.24],[-.24,-.24]].forEach(p=>add(B(.07,.08,.07,0x4a4426),p[0],.04,p[1]));
+      indY=1.0; break; }
+    case "furnace": { // Lichtbogenofen: Stahltiegel, glühende Schmelze, Elektroden-Portal + Schornstein
+      add(C(.4,.33,.5,0x7a4630,{roughness:.8}),0,.27,0);                      // Tiegel
+      add(C(.43,.43,.07,0x5a3322),0,.55,0);                                   // Ofenrand
+      add(C(.35,.35,.05,0xff5a00,{emissive:0xff4400,emissiveIntensity:1.5}),0,.57,0); // Schmelze
+      add(B(.09,.75,.09,0x3a3a3a,{metalness:.5}),-.4,.38,-.36);               // Portalstützen
+      add(B(.09,.75,.09,0x3a3a3a,{metalness:.5}),.4,.38,-.36);
+      add(B(.92,.09,.12,0x4a4a4a,{metalness:.5}),0,.78,-.36);                 // Portalbalken
+      [-.14,0,.14].forEach(px=>add(C(.035,.035,.5,0x1c1c1c),px,.75,-.05));    // Elektroden
+      add(C(.06,.09,.5,0x6a6a6a,{metalness:.5}),.34,.72,.32);                 // Schornstein
+      add(SP(.05,0xffb066,{emissive:0xff7722,emissiveIntensity:1}),-.28,.6,.3); // Funken-Glut
+      indY=1.12; break; }
+    case "siemens": { // Siemens-Reaktor: Kolonne mit Kuppel + Kühlringen, Seitentank, Verbindungsrohr
+      add(B(.62,.14,.62,0x24402e),0,.07,0);
+      add(C(.19,.22,.72,0x4a7a55,{metalness:.5,roughness:.35}),-.09,.5,-.05); // Kolonne
+      add(SP(.19,0x6fae82,{metalness:.4}),-.09,.88,-.05);                     // Kuppel
+      [.32,.5,.68].forEach(y=>add(C(.24,.24,.04,0x7fc094),-.09,y,-.05));      // Kühlringe
+      add(C(.12,.13,.34,0x3a6248,{metalness:.4}),.27,.24,.22);                // Seitentank
+      add(C(.13,.13,.04,0x6fae82),.27,.42,.22);
+      add(C(.028,.028,.34,0x9fc4a8,{metalness:.6}),.1,.5,.1,0,0,1.05);        // Verbindungsrohr
+      add(SP(.045,0x9fe8ff,{emissive:0x2c7a90,emissiveIntensity:.9}),-.09,1.06,-.05); // H₂-Licht
+      indY=1.2; break; }
+    case "crystal": { // Czochralski-Kristallzieher: Ofen + Portalrahmen + Ziehstab mit glühendem Barren
+      add(C(.32,.26,.32,0x5a4a6a,{roughness:.7}),0,.18,0);                    // Tiegelofen
+      add(C(.28,.28,.05,0xff6a00,{emissive:0xff5500,emissiveIntensity:1.2}),0,.36,0); // Schmelze
+      add(B(.07,.85,.07,0x8a94a2,{metalness:.6}),-.32,.45,0);                 // Portal links
+      add(B(.07,.85,.07,0x8a94a2,{metalness:.6}),.32,.45,0);                  // Portal rechts
+      add(B(.74,.08,.1,0xaab4c0,{metalness:.6}),0,.9,0);                      // Traverse
+      add(C(.025,.025,.44,0xd8d8d8,{metalness:.8}),0,.66,0);                  // Ziehstab
+      add(CO(.11,.28,0xbcd0ec,{emissive:0x3c5a80,emissiveIntensity:.6}),0,.47,0,Math.PI); // Barren
+      indY=1.1; break; }
+    case "waferplant": { // Wafer-Werk: Maschinengehäuse mit Sägeblatt, Sichtfenster + Wafer-Ausgabe
+      add(B(.74,.4,.58,0x2c3e58,{roughness:.5}),0,.22,-.12);                  // Gehäuse
+      add(B(.78,.06,.62,0x3a5274),0,.45,-.12);                                // Deckel
+      add(C(.17,.17,.03,0xd0d8e4,{metalness:.85,roughness:.2},20),.2,.5,-.12,Math.PI/2); // Sägeblatt
+      add(B(.26,.12,.02,0x5fd0ff,{emissive:0x2277cc,emissiveIntensity:.6}),-.18,.3,.18); // Sichtfenster
+      add(B(.5,.06,.24,0x22344c),0,.07,.32);                                  // Ausgabe-Tablett
+      [-.13,.02,.17].forEach(px=>add(C(.08,.08,.02,0xb9c9dd,{metalness:.7,roughness:.2},18),px,.12,.32)); // Wafer
+      indY=.85; break; }
+    case "fab": { // Reinraum-Komplex 2×2: weißer Reinraum, Fensterbänder, Dachtechnik + EUV-Kuppel
+      add(B(1.74,.55,1.74,0xd8dde6,{roughness:.55}),0,.3,0);                  // Reinraum-Gebäude
+      add(B(1.78,.1,1.78,0x8a4fa0,{roughness:.5}),0,.62,0);                   // Dachring
+      add(B(1.4,.1,.05,0x5fd0ff,{emissive:0x2277cc,emissiveIntensity:.7}),0,.36,.86); // Fensterband Süd
+      add(B(.05,.1,1.4,0x5fd0ff,{emissive:0x2277cc,emissiveIntensity:.7}),.86,.36,0); // Fensterband Ost
+      add(SP(.34,0x9fb3ff,{transparent:true,opacity:.55,emissive:0x335588,emissiveIntensity:.6}),-.38,.8,-.38); // EUV-Kuppel
+      [[.45,.3],[.45,-.3],[-.25,.45]].forEach(p=>add(B(.22,.16,.22,0x9aa4b2,{metalness:.5}),p[0],.75,p[1])); // Dach-HVAC
+      add(C(.05,.05,.4,0xb8c0cc,{metalness:.6}),.7,.86,-.7);                  // Abluftrohr
+      indY=1.25; break; }
+    case "packaging": { // Packaging: Vergussmaschine mit Roboterarm + fertigem Chip
+      add(B(.7,.3,.6,0x6a5320,{roughness:.6}),0,.17,0);                       // Pressen-Korpus
+      add(B(.74,.06,.64,0xb08030),0,.35,0);                                   // Deckel
+      add(B(.32,.08,.32,0x141414),0,.42,.05);                                 // Chip-Gehäuse
+      add(B(.18,.05,.18,0xffd24a,{emissive:0x4a3a00,emissiveIntensity:.6,metalness:.6}),0,.48,.05); // goldener Die
+      add(C(.05,.06,.3,0x8a94a2,{metalness:.7}),-.26,.5,-.2);                 // Roboterarm-Sockel
+      add(B(.3,.05,.07,0x9aa4b8,{metalness:.7}),-.12,.66,-.2);                // Arm
+      add(B(.05,.12,.05,0xb0b8c4,{metalness:.7}),.02,.6,-.2);                 // Greifer
+      add(B(.2,.1,.02,0x46d97e,{emissive:0x0c3a1f,emissiveIntensity:.7}),.22,.26,.31); // Status-Display
+      indY=.88; break; }
+    case "seller": { // Versand: LKW mit Container, verglaster Kabine, 6 Rädern + Laderampe
+      add(B(.56,.34,.42,0x3a9a5a,{roughness:.5}),-.12,.3,0);                  // Container
+      add(B(.58,.03,.44,0x2e7d48),-.12,.49,0);
+      add(B(.4,.02,.03,0xffffff),-.12,.34,.215);                              // Logo-Streifen
+      add(B(.22,.26,.38,0x2e7d48),.3,.24,0);                                  // Kabine
+      add(B(.02,.12,.3,0x9fd8ff,{emissive:0x2277cc,emissiveIntensity:.4}),.415,.3,0); // Frontscheibe
+      [[-.28,.22],[-.28,-.22],[0,.22],[0,-.22],[.3,.22],[.3,-.22]].forEach(p=>
+        add(C(.07,.07,.05,0x111111,{roughness:.8},12),p[0],.08,p[1],Math.PI/2)); // Räder
+      add(B(.28,.02,.22,0x8a8a8a,{metalness:.5}),-.5,.14,0,0,0,.45);          // Laderampe
+      indY=.78; break; }
     default:
       add(B(.8,.5,.8,d?d.col:0x888888),0,.3,0);
   }
@@ -942,6 +1006,7 @@ function statusOf(b){
   }
   if(b.kind==="seller") return ["bereit",0x44ff88];
   if(b.kind==="solar"){ if(!b.wired) return ["nicht verbunden",0xffd24a]; return game.sun>0.06?["☀️ "+Math.round(DEF.solar.powerGen*game.sun),0x44ff88]:["🌙 nachts inaktiv",0x5aa9ff]; }
+  if(b.kind==="wind") return b.wired?["🌬️ "+DEF.wind.powerGen+" (24/7)",0x44ff88]:["nicht verbunden",0xffd24a];
   if(b.kind==="nuclear") return b.wired?["☢️ "+DEF.nuclear.powerGen,0x44ff88]:["nicht verbunden",0xffd24a];
   if(b.kind==="battery"){ if(!b.wired) return ["nicht verbunden",0xffd24a]; const p=Math.round(b.stored/capOf(b)*100); return ["🔋 "+p+"%", p>15?0x44ff88:0xffd24a]; }
   return ["",0x44ff88];
@@ -1141,6 +1206,7 @@ const WHY = {
   sandmine:"Liefert Quarzsand — den Grundrohstoff der gesamten Chip-Produktion.",
   coalmine:"Liefert Kohle, die der Lichtbogenofen zusammen mit Sand benötigt.",
   solar:"Günstige Stromquelle für den Start — liefert aber nur tagsüber. Kombiniere sie mit Energiespeichern.",
+  wind:"Der Mars-Wind weht Tag UND Nacht: konstante 12 ⚡ rund um die Uhr. Pro kWh etwas teurer als Solar am Mittag, dafür brauchst du keine Energiespeicher für die Nacht.",
   pump:"Fördert Wasser in Rohre. Wasser brauchen Elektrolyseur, Wafer-Werk und Fab. Braucht selbst Strom.",
   battery:"Speichert überschüssigen Solarstrom tagsüber und gibt ihn nachts wieder ab.",
   electrolyseur:"Spaltet Wasser per Elektrolyse in Wasserstoff (H₂) und Sauerstoff (O₂). Belegt 3 Felder mit fest verbauten Rohren: H₂ vorne, O₂ hinten. Wasser seitlich zuführen. Sehr stromhungrig.",
@@ -1165,7 +1231,7 @@ function infoHTML(kind){
   else if(kind==="electrolyseur") prod.push("Wasserstoff (H₂) ×2 · Sauerstoff (O₂)");
   else if(RECIPES[kind] && RECIPES[kind].out) prod.push(ITEMS[RECIPES[kind].out].name+(RECIPES[kind].outCount?(" ×"+RECIPES[kind].outCount):""));
   else if(SOURCES[kind]) prod.push(ITEMS[SOURCES[kind].out].name);
-  if(d.powerGen) prod.push(d.powerGen+" ⚡"+(kind==="solar"?" (tagsüber)":kind==="nuclear"?" (24/7)":""));
+  if(d.powerGen) prod.push(d.powerGen+" ⚡"+(kind==="solar"?" (tagsüber)":kind==="wind"?" (24/7, konstant)":kind==="nuclear"?" (24/7)":""));
   if(d.powerCap) prod.push("speichert "+d.powerCap+" ⚡");
   if(kind==="seller") prod.push("+"+chipPrice()+" 💵 pro Chip");
   if(kind==="chemfab"){ cons.push("Roh-Chemikalien (Vorkommen)"); prod.push("füllt Vorräte auf (N₂ · Fluor · Photoresist · Bor · Phosphor · Arsen · Kupfer · Epoxidharz · Argon)"); }
@@ -1235,6 +1301,7 @@ function updateHUD(){
 function labelHTML(b){
   const d=DEF[b.kind]; let out=`<span class="t">${d.ic} ${d.name}</span>`;
   if(b.kind==="solar") out+=`<br><span class="p">+${d.powerGen} ⚡ Strom (tagsüber)</span>`;
+  else if(b.kind==="wind") out+=`<br><span class="p">+${d.powerGen} ⚡ Strom (24/7, konstant)</span>`;
   else if(b.kind==="nuclear") out+=`<br><span class="p">+${d.powerGen} ⚡ Strom (24/7)</span>`;
   else if(b.kind==="electrolyseur") out+=`<br><span class="p">→ H₂ (vorne) · O₂ (hinten)</span><br><span class="u">braucht Wasser · -${d.powerUse} ⚡</span>`;
   else if(b.kind==="gastank") out+=`<br><span class="p">Gas-Puffer</span><br><span class="u">H₂ ${Math.round(b.buf.h2||0)} · O₂ ${Math.round(b.buf.o2||0)} / ${gasCap()}</span>`;
@@ -1487,9 +1554,12 @@ function loop(){
     if(!document.getElementById('stats').classList.contains('hide')) renderStats();
     if(!document.getElementById('market').classList.contains('hide')) refreshMarket();
   }
-  // Belt-Pfeile pulsieren
+  // Belt-Pfeile pulsieren · Windrad-Rotoren drehen
   const pulse=.6+.4*Math.sin(performance.now()*.006);
-  for(const b of buildings){ if((b.kind==="belt"||b.kind==="pipe")&&b.mesh.userData.arrow) b.mesh.userData.arrow.material.emissiveIntensity=pulse; }
+  for(const b of buildings){
+    if((b.kind==="belt"||b.kind==="pipe")&&b.mesh.userData.arrow) b.mesh.userData.arrow.material.emissiveIntensity=pulse;
+    else if(b.kind==="wind"&&b.mesh.userData.rotor) b.mesh.userData.rotor.rotation.z-=dt*2.4;
+  }
   panCamera(dt); rotateSmooth(dt);
   controls.update();
   renderer.render(scene,camera);
@@ -1518,8 +1588,8 @@ function scatterResources(){
     : [["sandmine",5],["coalmine",3],["pump",3]];
   const placed=[];                                  // alle Quellen (Mindestabstand zueinander)
   const byType={};                                  // je Typ (größerer Abstand → ausgeglichene Verteilung)
-  const minDist  = diff==='easy'?6:5;               // Abstand zwischen beliebigen Quellen (2×2!)
-  const sameDist = diff==='easy'?7:12;              // Abstand zwischen gleichartigen Quellen
+  const minDist  = diff==='easy'?8:7;               // Abstand zwischen beliebigen Quellen (2×2!) — großzügig, damit Platz zum Bauen bleibt
+  const sameDist = diff==='easy'?10:14;             // Abstand zwischen gleichartigen Quellen
   for(const [kind,num] of want){
     byType[kind]=byType[kind]||[];
     let made=0, tries=0;
@@ -1610,8 +1680,9 @@ function setModeTitle(){ document.getElementById('title').textContent="CHIPTORIO
 function applyDifficulty(diff){
   game.difficulty=diff;
   setFieldSize(MODE_FIELD[diff]||MODE_FIELD.easy);
-  if(diff==='medium'){ camera.position.set(0,36,34); controls.target.set(0,0,0); }
-  else if(diff==='hard'){ camera.position.set(0,46,44); controls.target.set(0,0,0); }
+  if(diff==='medium'){ camera.position.set(0,42,40); controls.target.set(0,0,0); }
+  else if(diff==='hard'){ camera.position.set(0,52,50); controls.target.set(0,0,0); }
+  else { camera.position.set(0,24,22); controls.target.set(0,0,0); }
   buildHotbar(); buildSupplies(); buildGoals(); selectTool(toolList().includes(tool)?tool:"belt"); setModeTitle();
   const basic=!isAdv();
   for(const id of ['tech-btn','stats-btn','market-btn']) document.getElementById(id).classList.toggle('hide', basic);
