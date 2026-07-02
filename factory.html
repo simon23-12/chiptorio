@@ -67,6 +67,16 @@
   .tool .nm{font-size:9.5px;color:var(--txt);margin-top:1px;line-height:1.1}
   .tool .ky{position:absolute;top:3px;left:5px;font-family:var(--mono);font-size:8px;color:var(--dim)}
   .tool .cst{font-family:var(--mono);font-size:8.5px;color:var(--orange)}
+  /* Gruppen-Buttons (Transport/Energie/…) + Flyout mit den Einzel-Bauteilen */
+  .tool.grp{width:92px;background:#101f3a;border-color:#2e4a78}
+  .tool.grp .cst{color:var(--dim)}
+  .tool.grp.sel{border-color:var(--acc);background:#0c2b27;box-shadow:0 0 14px #34e0c055}
+  #flyout{position:fixed;bottom:100px;z-index:15;pointer-events:auto;display:flex;gap:6px;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px;backdrop-filter:blur(12px);
+    box-shadow:0 10px 30px #0008}
+  #flyout.hide{display:none!important}
+  #flyout::after{content:"";position:absolute;left:50%;bottom:-7px;transform:translateX(-50%) rotate(45deg);
+    width:12px;height:12px;background:var(--panel);border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
 
   /* overlay intro */
   #intro{position:fixed;inset:0;z-index:30;pointer-events:auto;display:flex;flex-direction:column;
@@ -206,6 +216,7 @@
   <div id="market-body"></div>
 </div></div>
 
+<div id="flyout" class="hide"></div>
 <div id="labels"></div>
 <div id="tip"></div>
 <div id="tipbox" class="hide"></div>
@@ -282,6 +293,7 @@ const DEF = {
   pipecross: {name:"Rohr-Kreuzung", ic:"➕", cost:14, col:0x2a6a8a, cat:"Logistik"},
   cable:     {name:"Stromkabel", ic:"🔌", cost:4, col:0x4a4426, cat:"Logistik"},
   gastank:   {name:"Gastank", ic:"🛢️", cost:120, col:0x6f6636, cat:"Logistik"},
+  depot:     {name:"Depot", ic:"🏬", cost:160, col:0x7a6a4a, cat:"Logistik"}, // Feststoff-Puffer (Pendant zum Gastank)
   sandmine:  {name:"Sandgrube", ic:"⛏️", cost:80,  col:0x6b5a3a, powerUse:3,  size:[2,2], cat:"Rohstoff"},
   coalmine:  {name:"Kohlemine", ic:"⚫", cost:90,  col:0x3a3a3a, powerUse:3,  size:[2,2], cat:"Rohstoff"},
   pump:      {name:"Wasserpumpe", ic:"💧", cost:120, col:0x2a8fb0, powerUse:6, size:[2,2], cat:"Rohstoff"},
@@ -349,18 +361,25 @@ const RECIPES = {
 };
 const CHIP_PRICE = 155;
 // Sandgrube/Kohlemine/Wasserpumpe sind NICHT baubar — sie werden beim Start zufällig auf der Karte verteilt.
-const TOOLS = ["belt","cross","pipe","pipecross","cable","solar","wind","battery","nuclear","electrolyseur","gastank","furnace","siemens","crystal","waferplant","fab","packaging","seller","delete"];
+// Hotbar-Gruppen: je ein Button, Bauteile im Flyout (Hover/Klick). Chemiefabrik + Upgrade nur ab „mittel“.
+const TOOL_GROUPS=()=>[
+  {id:'transport', name:'Transport', ic:'➤',  tools:['belt','cross','pipe','pipecross']},
+  {id:'energy',    name:'Energie',   ic:'⚡', tools:['cable','solar','wind','battery','nuclear']},
+  {id:'mach',      name:'Maschinen', ic:'🏭', tools:['electrolyseur','furnace','siemens','crystal','waferplant','fab','packaging',...(isAdv()?['chemfab']:[])]},
+  {id:'stock',     name:'Lager',     ic:'📦', tools:['gastank','depot','seller']},
+];
 const TOOLMETA = { delete:{name:"Abriss",ic:"❌",cost:0}, upgrade:{name:"Upgrade",ic:"⬆️",cost:0} }; // Werkzeuge ohne Gebäude
-function toolList(){ // Chemiefabrik + Upgrade-Werkzeug nur in „mittel“/„schwer“
-  if(!isAdv()) return TOOLS;
-  const t=TOOLS.slice(); t.splice(t.indexOf('seller'),0,'chemfab'); t.push('upgrade'); return t;
+function toolList(){ // flache Liste (Gültigkeits-Checks)
+  const t=TOOL_GROUPS().flatMap(g=>g.tools); t.push('delete'); if(isAdv()) t.push('upgrade'); return t;
 }
-const GAS_CAP = 2000; // Gastank-Kapazität je Gas im Modus „einfach“ (sehr groß = "Abfluss")
+const GAS_CAP = 2000;   // Gastank-Kapazität je Gas im Modus „einfach“ (sehr groß = "Abfluss")
+const DEPOT_CAP = 1500; // Depot-Kapazität (gesamt) im Modus „einfach“
 
-// ---- Upgrades / Tech-Tree (nur Modus „schwer“; in „einfach“ bleiben alle Stufen 1 = neutral) ----
-const SOLAR_MULT=[1,1.10,1.25], CARRIER_MULT=[1,1.5,2.0], MACHINE_MULT=[1,1.4,1.8], CAP_MULT=[1,1.5,2.0], CHIP_MULT=[1,1.6,2.4], GAS_CAP_HARD=[300,800,2000];
-const TECH_KEYS=['solar','battery','gastank','belt','pipe','chip'];
+// ---- Upgrades / Tech-Tree (ab „mittel“; in „einfach“ bleiben alle Stufen 1 = neutral) ----
+const SOLAR_MULT=[1,1.10,1.25], WIND_MULT=[1,1.25,1.5], CARRIER_MULT=[1,1.5,2.0], MACHINE_MULT=[1,1.4,1.8], CAP_MULT=[1,1.5,2.0], CHIP_MULT=[1,1.6,2.4], GAS_CAP_HARD=[300,800,2000], DEPOT_CAP_HARD=[250,600,1500];
+const TECH_KEYS=['solar','wind','battery','gastank','depot','belt','pipe','chip'];
 const solarMult =()=>SOLAR_MULT[(game.tech.solar||1)-1];
+const windMult  =()=>WIND_MULT[(game.tech.wind||1)-1];
 const beltMult  =()=>CARRIER_MULT[(game.tech.belt||1)-1];
 const pipeMult  =()=>CARRIER_MULT[(game.tech.pipe||1)-1];
 const batMult   =()=>CAP_MULT[(game.tech.battery||1)-1];
@@ -369,11 +388,15 @@ const chipPrice =()=>Math.round(CHIP_PRICE*chipMult());        // Verkaufswert p
 const machineMult=lvl=>MACHINE_MULT[(lvl||1)-1];
 const capOf     =b=> (DEF[b.kind].powerCap||0)*batMult();      // effektive Akku-Kapazität (inkl. Upgrade)
 const gasCap    =()=> isAdv() ? GAS_CAP_HARD[(game.tech.gastank||1)-1] : GAS_CAP;
-const TECH_COST={ solar:[800,2000], battery:[700,1800], gastank:[600,1500], belt:[1200,3000], pipe:[1000,2500], chip:[3000,8000] }; // Kosten Stufe1→2, Stufe2→3
+const depotCap  =()=> isAdv() ? DEPOT_CAP_HARD[(game.tech.depot||1)-1] : DEPOT_CAP;
+const depotTotal=b=> Object.values(b.buf).reduce((s,v)=>s+v,0);
+const TECH_COST={ solar:[800,2000], wind:[700,1800], battery:[700,1800], gastank:[600,1500], depot:[600,1500], belt:[1200,3000], pipe:[1000,2500], chip:[3000,8000] }; // Kosten Stufe1→2, Stufe2→3
 const TECH_INFO={
   solar:  {name:'Solarzellen',        ic:'☀️', eff:l=>['Basis-Ertrag','+10 % Ertrag','+25 % Ertrag'][l-1]},
+  wind:   {name:'Windräder',          ic:'🌬️', eff:l=>'Ertrag ×'+WIND_MULT[l-1].toFixed(2)+' ('+Math.round(DEF.wind.powerGen*WIND_MULT[l-1])+' ⚡, 24/7)'},
   battery:{name:'Energiespeicher',    ic:'🔋', eff:l=>'Kapazität ×'+CAP_MULT[l-1].toFixed(2)+' ('+(DEF.battery.powerCap*CAP_MULT[l-1])+' ⚡)'},
   gastank:{name:'Gastank-Kapazität',  ic:'🛢️', eff:l=>GAS_CAP_HARD[l-1]+' Gas / Tank'},
+  depot:  {name:'Depot-Kapazität',    ic:'🏬', eff:l=>DEPOT_CAP_HARD[l-1]+' Items / Depot'},
   belt:   {name:'Förderbänder',       ic:'➤', eff:l=>'Transport ×'+CARRIER_MULT[l-1].toFixed(2)},
   pipe:   {name:'Rohre',              ic:'🚰', eff:l=>'Transport ×'+CARRIER_MULT[l-1].toFixed(2)},
   chip:   {name:'End-Chip-Veredelung',ic:'🔲', eff:l=>['Standard-Chip','Premium-Chip','High-End-Chip'][l-1]+' · '+Math.round(CHIP_PRICE*CHIP_MULT[l-1])+' 💵/Chip'},
@@ -381,7 +404,7 @@ const TECH_INFO={
 const KEYMAP = {}; // Bauteile werden per Mausklick in der Leiste gewählt — keine Hotkeys (Tasten gehören der Navigation)
 
 const DAYLEN = 100; // Sekunden pro Tag/Nacht-Zyklus
-const game = { money:5500, chips:0, made:{}, goalsDone:{}, tech:{solar:1,battery:1,gastank:1,belt:1,pipe:1,chip:1},
+const game = { money:5500, chips:0, made:{}, goalsDone:{}, tech:{solar:1,wind:1,battery:1,gastank:1,depot:1,belt:1,pipe:1,chip:1},
   powerGen:0, powerDemand:0, powerOK:true, rate:0, soldWindow:[],
   storedPower:0, powerCap:0, timeOfDay:0.33, sun:1, speed:1, difficulty:'easy',
   simTime:0, stats:{power:[],dem:[],rate:{},snap:{},acc:0}, market:{sat:{}}, contracts:{} };
@@ -631,6 +654,15 @@ function makeMesh(kind,dir){
       add(C(.03,.03,.14,0x8a7d3a,{metalness:.6}),.36,.5,0,0,0,Math.PI/2);     // Ventilstutzen
       [[.24,.24],[-.24,.24],[.24,-.24],[-.24,-.24]].forEach(p=>add(B(.07,.08,.07,0x4a4426),p[0],.04,p[1]));
       indY=1.0; break; }
+    case "depot": { // Depot: Lagerhalle mit Tonnendach, Rolltor + Kisten an der Rampe
+      add(B(.8,.4,.66,0x7a6a4a,{roughness:.7}),0,.22,-.05);                   // Halle
+      const roof=new THREE.Mesh(new THREE.CylinderGeometry(.34,.34,.8,14,1,false,0,Math.PI),mat(0x8f7d58,{roughness:.6}));
+      roof.rotation.z=Math.PI/2; roof.rotation.x=Math.PI; roof.position.set(0,.42,-.05); g.add(roof); // Tonnendach
+      add(B(.3,.26,.02,0x4a3f2a,{roughness:.5}),0,.15,.29);                   // Rolltor
+      [.06,.12,.18].forEach(y=>add(B(.3,.012,.025,0x35301e),0,y+.03,.3));     // Tor-Lamellen
+      add(B(.14,.1,.14,0xa8895a),.3,.07,.32); add(B(.11,.09,.11,0x8f7346),.14,.07,.38); // Kisten
+      add(B(.1,.08,.1,0xba9a6a),.3,.19,.32);
+      indY=.95; break; }
     case "furnace": { // Lichtbogenofen: Stahltiegel, glühende Schmelze, Elektroden-Portal + Schornstein
       add(C(.4,.33,.5,0x7a4630,{roughness:.8}),0,.27,0);                      // Tiegel
       add(C(.43,.43,.07,0x5a3322),0,.55,0);                                   // Ofenrand
@@ -767,6 +799,7 @@ function beltInflow(b){
   const feeds=s=>{ const nx=b.x+DIRS[s][0], nz=b.z+DIRS[s][1]; const nb=grid_.get(k(nx,nz)); if(!nb) return false;
     if(nb.kind==="belt") return nb.x+DIRS[nb.dir][0]===b.x && nb.z+DIRS[nb.dir][1]===b.z; // Nachbar-Band zeigt herein
     if(nb.kind==="cross") return true; // Kreuzung: die durchlaufende Spur kann herein liefern
+    if(nb.kind==="depot") return true; // Depot gibt gepufferte Feststoffe rundum ab
     const out = SOURCES[nb.kind]?SOURCES[nb.kind].out : (RECIPES[nb.kind]?RECIPES[nb.kind].out:null);
     return out && !isFluid(out); // Quelle/Maschine, die Feststoffe ausgibt
   };
@@ -831,6 +864,7 @@ function tryDeposit(type,nx,nz,fx,fz){
   if(RECIPES[nb.kind] && machineAccepts(nb,type)){ nb.buf[type]=(nb.buf[type]||0)+1; return true; }
   if(nb.kind==="chemfab" && machineAccepts(nb,type)){ nb.buf[type]=(nb.buf[type]||0)+1; return true; }
   if(nb.kind==="gastank" && isFluid(type) && (nb.buf[type]||0)<gasCap()){ nb.buf[type]=(nb.buf[type]||0)+1; return true; }
+  if(nb.kind==="depot" && !isFluid(type) && depotTotal(nb)<depotCap()){ nb.buf[type]=(nb.buf[type]||0)+1; return true; }
   if(nb.kind==="seller" && type==="chip"){ sellChip(); return true; }
   return false;
 }
@@ -851,6 +885,17 @@ function tankEmit(b){
     if((b.buf[type]||0)<=0) continue;
     for(let i=0;i<opts.length;i++){ const o=opts[(b._rr+i)%opts.length]; const nb=grid_.get(k(o[0],o[1]));
       if(!nb || nb.kind==="gastank") continue;
+      if(tryDeposit(type,o[0],o[1],o[2],o[3])){ b.buf[type]--; b._rr=(b._rr+i+1)%opts.length; break; }
+    }
+  }
+}
+// Depot: gibt gepufferte Feststoffe an angeschlossene Bänder/Maschinen ab (nicht an andere Depots).
+function depotEmit(b){
+  const opts=perimeter(b); if(!opts.length) return; b._rr=b._rr||0;
+  for(const type in b.buf){
+    if((b.buf[type]||0)<=0) continue;
+    for(let i=0;i<opts.length;i++){ const o=opts[(b._rr+i)%opts.length]; const nb=grid_.get(k(o[0],o[1]));
+      if(!nb || nb.kind==="depot") continue;
       if(tryDeposit(type,o[0],o[1],o[2],o[3])){ b.buf[type]--; b._rr=(b._rr+i+1)%opts.length; break; }
     }
   }
@@ -885,6 +930,7 @@ function moveItems(dt){
       else if(nb && RECIPES[nb.kind] && machineAccepts(nb,it.type)){ nb.buf[it.type]=(nb.buf[it.type]||0)+1; it._dead=true; scene.remove(it.mesh); continue; }
       else if(nb && nb.kind==="chemfab" && machineAccepts(nb,it.type)){ nb.buf[it.type]=(nb.buf[it.type]||0)+1; it._dead=true; scene.remove(it.mesh); continue; }
       else if(nb && nb.kind==="gastank" && isFluid(it.type) && (nb.buf[it.type]||0)<gasCap()){ nb.buf[it.type]=(nb.buf[it.type]||0)+1; it._dead=true; scene.remove(it.mesh); continue; }
+      else if(nb && nb.kind==="depot" && !isFluid(it.type) && depotTotal(nb)<depotCap()){ nb.buf[it.type]=(nb.buf[it.type]||0)+1; it._dead=true; scene.remove(it.mesh); continue; }
       else if(nb && nb.kind==="seller" && it.type==="chip"){ sellChip(); it._dead=true; scene.remove(it.mesh); continue; }
       else it.prog=1.0;
     } else it.prog=np;
@@ -922,7 +968,7 @@ function computeUtilities(dt){
     if(nb && nb!==b && nb._pid!==undefined){ union(b._pid,nb._pid); b.wired=true; nb.wired=true; } } } }
   const nets={};
   for(const b of pbuild){ const r=find(b._pid); const net=nets[r]||(nets[r]={gen:0,dem:0,bats:[],cons:[]}); const d=DEF[b.kind];
-    if(d.powerGen) net.gen += d.powerGen*(b.kind==="solar"?game.sun*solarMult():1); // Solar: nachts 0 · Upgrade ×; AKW konstant
+    if(d.powerGen) net.gen += d.powerGen*(b.kind==="solar"?game.sun*solarMult():b.kind==="wind"?windMult():1); // Solar: nachts 0 · Wind konstant (je inkl. Upgrade); AKW fix
     if(d.powerCap) net.bats.push(b);
     if(d.powerUse){ const wants = (RECIPES[b.kind]||b.kind==="chemfab")? b.want : true; if(wants) net.dem+=d.powerUse; net.cons.push(b); }
   }
@@ -954,6 +1000,8 @@ function tickWork(dt){
         if(!spawnOut(b,s.out)) b.outBuf=1; if(b.left!=null) b.left--; } }
     } else if(b.kind==="gastank"){
       tankEmit(b);
+    } else if(b.kind==="depot"){
+      depotEmit(b);
     } else if(b.kind==="chemfab"){ // wandelt eingehende Roh-Chemikalien in Vorräte um („mittel“/„schwer“)
       if(b.powered && b.want){ b.t+=dt; if(b.t>=CHEM_TIME/machineMult(b.speedLvl)){ b.t=0;
         for(const kk of chemKeys()){ if((b.buf[kk]||0)>0){ b.buf[kk]--; SUP[kk].stock+=CHEM_YIELD; } } } }
@@ -992,6 +1040,8 @@ function statusOf(b){
   if(b.kind==="electrolyseur"){ if((b.h2Buf||0)>0||(b.o2Buf||0)>0) return ["gibt H₂/O₂ ab",0x44ff88]; if((b.buf.water||0)>=2) return ["läuft",0x44ff88]; return ["wartet auf Wasser",0xff5d6c]; }
   if(b.kind==="gastank"){ const c=gasCap(), h=Math.round(b.buf.h2||0), o=Math.round(b.buf.o2||0), w=Math.round(b.buf.water||0);
     const full=Math.max(h,o,w)>=c*0.999; return ["🛢️ H₂ "+h+"/"+c+" · O₂ "+o+"/"+c+(w?(" · 💧"+w):"")+(full?" · VOLL":""), full?0xffd24a:0x44ff88]; }
+  if(b.kind==="depot"){ const c=depotCap(), t=Math.round(depotTotal(b));
+    const full=t>=c*0.999; return ["🏬 "+t+"/"+c+" Items"+(full?" · VOLL":""), full?0xffd24a:0x44ff88]; }
   if(b.kind==="chemfab"){ const tot=chemKeys().reduce((s,kk)=>s+(b.buf[kk]||0),0); return tot>0?["wandelt um",0x44ff88]:["wartet auf Rohstoffe",0xffd24a]; }
   if(b.kind==="cross"||b.kind==="pipecross") return ["Kreuzung — beide Richtungen laufen geradeaus durch",0x44ff88];
   if(SOURCES[b.kind]){
@@ -1006,7 +1056,7 @@ function statusOf(b){
   }
   if(b.kind==="seller") return ["bereit",0x44ff88];
   if(b.kind==="solar"){ if(!b.wired) return ["nicht verbunden",0xffd24a]; return game.sun>0.06?["☀️ "+Math.round(DEF.solar.powerGen*game.sun),0x44ff88]:["🌙 nachts inaktiv",0x5aa9ff]; }
-  if(b.kind==="wind") return b.wired?["🌬️ "+DEF.wind.powerGen+" (24/7)",0x44ff88]:["nicht verbunden",0xffd24a];
+  if(b.kind==="wind") return b.wired?["🌬️ "+Math.round(DEF.wind.powerGen*windMult())+" (24/7)",0x44ff88]:["nicht verbunden",0xffd24a];
   if(b.kind==="nuclear") return b.wired?["☢️ "+DEF.nuclear.powerGen,0x44ff88]:["nicht verbunden",0xffd24a];
   if(b.kind==="battery"){ if(!b.wired) return ["nicht verbunden",0xffd24a]; const p=Math.round(b.stored/capOf(b)*100); return ["🔋 "+p+"%", p>15?0x44ff88:0xffd24a]; }
   return ["",0x44ff88];
@@ -1203,6 +1253,7 @@ const WHY = {
   pipecross:"Kreuzung für Rohre: zwei Leitungen kreuzen sich (eine führt als Brücke darüber), ohne dass sich die Fluide vermischen — alles fließt geradeaus weiter.",
   cable:"Verteilt Strom. JEDES Gebäude, das Strom braucht, muss per Kabel mit einem Kraftwerk verbunden sein — Bänder & Rohre nicht.",
   gastank:"Großer Puffer für Gase (H₂ & O₂). Nimmt überschüssiges Gas auf, damit der Elektrolyseur weiterläuft, auch wenn ein Gas gerade nicht gebraucht wird — und gibt es bei Bedarf wieder ab. Braucht keinen Strom, nur 1 Feld.",
+  depot:"Lager für ALLES, was über Förderbänder läuft (Sand … Chips): nimmt Feststoffe auf und gibt sie wieder an Bänder oder direkt an Maschinen ab — das Gegenstück zum Gastank. Glättet Produktionsspitzen und puffert Nachschub. Braucht keinen Strom.",
   sandmine:"Liefert Quarzsand — den Grundrohstoff der gesamten Chip-Produktion.",
   coalmine:"Liefert Kohle, die der Lichtbogenofen zusammen mit Sand benötigt.",
   solar:"Günstige Stromquelle für den Start — liefert aber nur tagsüber. Kombiniere sie mit Energiespeichern.",
@@ -1228,6 +1279,7 @@ function infoHTML(kind){
   if(RECIPES[kind]){ for(const key in RECIPES[kind].in)cons.push(ITEMS[key].name); for(const key in RECIPES[kind].sup)cons.push(SUP[key].name); }
   let prod=[];
   if(kind==="gastank") prod.push("puffert H₂ & O₂ (Abfluss für den Elektrolyseur)");
+  else if(kind==="depot") prod.push("lagert bis zu "+depotCap()+" Feststoff-Items (alle Band-Waren)");
   else if(kind==="electrolyseur") prod.push("Wasserstoff (H₂) ×2 · Sauerstoff (O₂)");
   else if(RECIPES[kind] && RECIPES[kind].out) prod.push(ITEMS[RECIPES[kind].out].name+(RECIPES[kind].outCount?(" ×"+RECIPES[kind].outCount):""));
   else if(SOURCES[kind]) prod.push(ITEMS[SOURCES[kind].out].name);
@@ -1243,24 +1295,55 @@ function infoHTML(kind){
     (prod.length?`<div class="recipe" style="color:var(--good)">Stellt her: ${prod.join(" · ")}</div>`:"");
 }
 function showInfo(kind){ document.getElementById('info').innerHTML=infoHTML(kind); }
+// Hotbar: Gruppen-Buttons (Transport/Energie/Maschinen/Lager) mit Flyout + direkte Werkzeuge (Abriss/Upgrade).
+let flyoutTimer=null;
+function toolTile(kk){ // Bauteil-Kachel (in Flyout und Hotbar identisch)
+  const d=DEF[kk]||TOOLMETA[kk]||{name:kk,ic:"?",cost:0};
+  const el=document.createElement('div'); el.className="tool"+(kk==="delete"?" del":""); el.dataset.k=kk;
+  el.innerHTML=`<div class="ic">${d.ic}</div><div class="nm">${d.name}</div>`+
+    ((kk!=="delete"&&kk!=="upgrade")?`<div class="cst">${d.cost} 💵</div>`:`<div class="cst">&nbsp;</div>`);
+  el.onclick=()=>selectTool(kk);
+  el.onmouseenter=()=>showInfo(kk);           // Hover: Infos anzeigen
+  el.onmouseleave=()=>showInfo(tool);         // zurück zum gewählten Werkzeug
+  return el;
+}
+function openFlyout(gdef,anchor){
+  clearTimeout(flyoutTimer);
+  const fl=document.getElementById('flyout'); fl.innerHTML=""; fl.dataset.g=gdef.id;
+  for(const kk of gdef.tools) fl.appendChild(toolTile(kk));
+  fl.classList.remove('hide');
+  const r=anchor.getBoundingClientRect();
+  let left=r.left+r.width/2-fl.offsetWidth/2; left=Math.max(8,Math.min(innerWidth-fl.offsetWidth-8,left));
+  fl.style.left=left+"px";
+  markToolSelection();
+}
+function closeFlyoutSoon(){ clearTimeout(flyoutTimer);
+  flyoutTimer=setTimeout(()=>document.getElementById('flyout').classList.add('hide'),260); }
 function buildHotbar(){
   const hb=document.getElementById('hotbar'); hb.innerHTML="";
   const row=document.createElement('div'); row.className="hotrow"; // zentriert, scrollt als Ganzes bei schmalem Fenster
-  const keyFor = kk=> Object.keys(KEYMAP).find(x=>KEYMAP[x]===kk);
-  for(const kk of toolList()){ const d=DEF[kk]||TOOLMETA[kk]||{name:kk,ic:"?",cost:0};
-    const el=document.createElement('div'); el.className="tool"+(kk==="delete"?" del":""); el.dataset.k=kk;
-    const ky=keyFor(kk);
-    el.innerHTML=`<div class="ky">${ky?ky.toUpperCase():""}</div><div class="ic">${d.ic}</div><div class="nm">${d.name}</div>`+
-      ((kk!=="delete"&&kk!=="upgrade")?`<div class="cst">${d.cost} 💵</div>`:`<div class="cst">&nbsp;</div>`);
-    el.onclick=()=>selectTool(kk);
-    el.onmouseenter=()=>showInfo(kk);           // Hover: Infos anzeigen
-    el.onmouseleave=()=>showInfo(tool);         // zurück zum gewählten Werkzeug
+  for(const gdef of TOOL_GROUPS()){
+    const el=document.createElement('div'); el.className="tool grp"; el.dataset.g=gdef.id;
+    el.innerHTML=`<div class="ic">${gdef.ic}</div><div class="nm">${gdef.name}</div><div class="cst">▾</div>`;
+    el.onmouseenter=()=>openFlyout(gdef,el);
+    el.onmouseleave=()=>closeFlyoutSoon();
+    el.onclick=()=>openFlyout(gdef,el);
     row.appendChild(el);
   }
+  for(const kk of ['delete', ...(isAdv()?['upgrade']:[])]) row.appendChild(toolTile(kk));
   hb.appendChild(row);
+  const fl=document.getElementById('flyout');
+  fl.onmouseenter=()=>clearTimeout(flyoutTimer);
+  fl.onmouseleave=()=>closeFlyoutSoon();
+  markToolSelection();
+}
+function markToolSelection(){ // gewähltes Bauteil + zugehörige Gruppe hervorheben
+  document.querySelectorAll('.tool[data-k]').forEach(e=>e.classList.toggle('sel', e.dataset.k===tool));
+  document.querySelectorAll('.tool.grp').forEach(e=>{ const g=TOOL_GROUPS().find(x=>x.id===e.dataset.g);
+    e.classList.toggle('sel', !!g && g.tools.includes(tool)); });
 }
 function selectTool(kk){ tool=kk; ensureGhost(); updateGhost();
-  document.querySelectorAll('.tool').forEach(e=>e.classList.toggle('sel', e.dataset.k===kk));
+  markToolSelection();
   showInfo(kk);
 }
 function buildSupplies(){
@@ -1301,10 +1384,12 @@ function updateHUD(){
 function labelHTML(b){
   const d=DEF[b.kind]; let out=`<span class="t">${d.ic} ${d.name}</span>`;
   if(b.kind==="solar") out+=`<br><span class="p">+${d.powerGen} ⚡ Strom (tagsüber)</span>`;
-  else if(b.kind==="wind") out+=`<br><span class="p">+${d.powerGen} ⚡ Strom (24/7, konstant)</span>`;
+  else if(b.kind==="wind") out+=`<br><span class="p">+${Math.round(d.powerGen*windMult())} ⚡ Strom (24/7, konstant)</span>${windMult()>1?`<br><span class="u">Windräder Lv ${game.tech.wind}</span>`:""}`;
   else if(b.kind==="nuclear") out+=`<br><span class="p">+${d.powerGen} ⚡ Strom (24/7)</span>`;
   else if(b.kind==="electrolyseur") out+=`<br><span class="p">→ H₂ (vorne) · O₂ (hinten)</span><br><span class="u">braucht Wasser · -${d.powerUse} ⚡</span>`;
   else if(b.kind==="gastank") out+=`<br><span class="p">Gas-Puffer</span><br><span class="u">H₂ ${Math.round(b.buf.h2||0)} · O₂ ${Math.round(b.buf.o2||0)} / ${gasCap()}</span>`;
+  else if(b.kind==="depot"){ const tot=Object.entries(b.buf).filter(([,v])=>v>0).map(([kk,v])=>ITEMS[kk].name+"×"+Math.floor(v)).join(", ");
+    out+=`<br><span class="p">Feststoff-Lager</span><br><span class="u">${Math.round(depotTotal(b))} / ${depotCap()}${tot?("<br>"+tot):""}</span>`; }
   else if(b.kind==="chemfab"){ const tot=chemKeys().reduce((s,kk)=>s+(b.buf[kk]||0),0); out+=`<br><span class="p">füllt Vorräte auf</span><br><span class="u">Puffer ${tot} · -${d.powerUse} ⚡</span>`; }
   else if(SOURCES[b.kind]){ out+=`<br><span class="p">→ ${ITEMS[SOURCES[b.kind].out].name}</span><br><span class="u">-${d.powerUse} ⚡</span>`;
     if(b.left!=null&&isFinite(b.left)) out+= b.left>0?`<br><span class="u">Vorkommen: ${Math.max(0,Math.ceil(b.left))} übrig</span>`:`<br><span class="w">⛔ erschöpft</span>`; }
@@ -1645,7 +1730,7 @@ function loadGame(d){
   placeDir=1;
   for(const si of (d.items||[])){ const t=grid_.get(k(si.x,si.z)); if(t&&isCarrier(t)) makeItem(si.type,si.x,si.z,si.prog,si.dir); }
   game.money=(d.money!=null?d.money:game.money); game.chips=d.chips||0; game.timeOfDay=d.timeOfDay||0.33; game.speed=1; game.soldWindow=[];
-  game.made=d.made||{}; game.goalsDone=d.goalsDone||{}; game.tech=Object.assign({solar:1,battery:1,gastank:1,belt:1,pipe:1,chip:1}, d.tech||{}); resetStatsMarket();
+  game.made=d.made||{}; game.goalsDone=d.goalsDone||{}; game.tech=Object.assign({solar:1,wind:1,battery:1,gastank:1,depot:1,belt:1,pipe:1,chip:1}, d.tech||{}); resetStatsMarket();
   game.contracts=d.contracts||{}; buildGoals();
   for(const kk in SUP){ if(d.sup && d.sup[kk]!=null) SUP[kk].stock=d.sup[kk]; }
   const ab=document.getElementById('autobuy'); if(ab && d.autobuy!=null) ab.checked=d.autobuy;
@@ -1693,7 +1778,7 @@ function resetSupplies(diff){ for(const kk in SUP){
 function startFactory(diff){
   applyDifficulty(diff);
   game.money = MODE_MONEY[diff]||MODE_MONEY.easy; game.chips=0; game.soldWindow=[]; resetSupplies(diff);
-  game.made={}; game.goalsDone={}; game.tech={solar:1,battery:1,gastank:1,belt:1,pipe:1,chip:1}; resetStatsMarket();
+  game.made={}; game.goalsDone={}; game.tech={solar:1,wind:1,battery:1,gastank:1,depot:1,belt:1,pipe:1,chip:1}; resetStatsMarket();
   if(diff!=='easy'){ clearFactory(); scatterResources(); } // großes Feld neu erzeugen; „einfach“ nutzt die beim Laden erzeugte Karte
   document.getElementById('intro').classList.add('hide'); started=true; if(musicOn) playTrack();
   toast(diff==='hard'
